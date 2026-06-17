@@ -11,6 +11,7 @@ import AppKit
 @main
 struct KommandoApp: App {
     @State private var settings = SettingsStore.shared
+    private let updater = AppUpdater.shared
 
     init() {
         // Opt out of macOS automatic window tabbing so ⌘N always opens a real window,
@@ -29,6 +30,9 @@ struct KommandoApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             AppCommands()
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesView(updater: updater.updater)
+            }
         }
 
         Settings {

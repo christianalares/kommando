@@ -20,6 +20,8 @@ struct SettingsView: View {
                 .tabItem { Label("Commands", systemImage: "command") }
             AISettingsView()
                 .tabItem { Label("AI", systemImage: "sparkles") }
+            UpdatesSettingsView()
+                .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
         }
         .frame(width: 520)
         .padding(20)
@@ -238,6 +240,29 @@ private struct CommandRow: View {
             get: { command.shortcut ?? KeyShortcut(key: "") },
             set: { command.shortcut = $0.key.isEmpty ? nil : $0 }
         )
+    }
+}
+
+private struct UpdatesSettingsView: View {
+    @StateObject private var model = UpdaterSettingsViewModel(updater: AppUpdater.shared.updater)
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Automatically check for updates", isOn: $model.automaticallyChecksForUpdates)
+                Toggle("Automatically download updates", isOn: $model.automaticallyDownloadsUpdates)
+                    .disabled(!model.automaticallyChecksForUpdates)
+
+                Button("Check for Updates…") {
+                    AppUpdater.shared.checkForUpdates()
+                }
+            } footer: {
+                Text("Kommando is on the beta channel and updates are signed and verified before installing.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 

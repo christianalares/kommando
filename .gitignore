@@ -21,3 +21,8 @@ xcuserdata/
 *.ipa
 *.dSYM.zip
 *.dSYM
+
+# Release pipeline
+dist/
+vendor/
+scripts/release.env
