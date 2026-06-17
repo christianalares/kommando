@@ -1,13 +1,18 @@
 <div align="center">
+  <img src="docs/icon.png" alt="Kommando" width="120" height="120" />
+  <h1>Kommando</h1>
+  <p><strong>A fast, native macOS terminal — split panes, tabs, and an AI sidebar, built in SwiftUI.</strong></p>
+  <p>
+    <a href="https://kommando.app"><strong>🌐 kommando.app</strong></a>
+  </p>
+</div>
 
-<img src="docs/icon.png" alt="Kommando app icon" width="128" />
+<br />
 
-# Kommando
-
-**A fast, native macOS terminal — split panes, tabs, an AI sidebar, and a command palette, built in SwiftUI.**
-
-<img src="docs/hero.webp" alt="Kommando showing a file tree alongside the AI assistant" width="900" />
-
+<div align="center">
+  <a href="https://kommando.app">
+    <img src="docs/hero.webp" alt="Kommando terminal with the AI assistant explaining a project's file structure" width="860" />
+  </a>
 </div>
 
 ## Features
