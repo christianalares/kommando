@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/icon.png" alt="Kommando app icon" width="128" />
+
 # Kommando
 
 **A fast, native macOS terminal — split panes, tabs, an AI sidebar, and a command palette, built in SwiftUI.**
