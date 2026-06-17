@@ -21,6 +21,20 @@ enum SplitAxis: String, Codable, Sendable {
     case vertical
 }
 
+/// Which side of a pane another pane is being dropped onto.
+enum PaneEdge {
+    case leading
+    case trailing
+    case top
+    case bottom
+}
+
+/// A resolved drop location: the pane being targeted and the edge to insert against.
+struct PaneDropTarget: Equatable {
+    let leafId: String
+    let edge: PaneEdge
+}
+
 indirect enum PaneNode: Identifiable, Codable, Equatable {
     case leaf(id: String, kind: PaneKind)
     case split(id: String, axis: SplitAxis, children: [PaneNode], fractions: [Double])
@@ -110,6 +124,25 @@ indirect enum PaneNode: Identifiable, Codable, Equatable {
                 $0.splittingLeaf(leafId, axis: axis, newKind: newKind, newLeafId: newLeafId)
             }
             return .split(id: id, axis: axis2, children: newChildren, fractions: fractions)
+        }
+    }
+
+    /// Inserts an entire subtree next to `leafId`, wrapping that leaf in a new split on the
+    /// given edge. Used when a tab is dropped into the pane area to become a split.
+    func inserting(_ subtree: PaneNode, nextTo leafId: String, edge: PaneEdge) -> PaneNode {
+        switch self {
+        case .leaf(let id, _):
+            guard id == leafId else { return self }
+            let axis: SplitAxis = (edge == .leading || edge == .trailing) ? .horizontal : .vertical
+            let children: [PaneNode] = (edge == .leading || edge == .top)
+                ? [subtree, self]
+                : [self, subtree]
+            return .split(id: UUID().uuidString, axis: axis, children: children, fractions: [0.5, 0.5])
+        case .split(let id, let axis, let children, let fractions):
+            let newChildren = children.map {
+                $0.inserting(subtree, nextTo: leafId, edge: edge)
+            }
+            return .split(id: id, axis: axis, children: newChildren, fractions: fractions)
         }
     }
 

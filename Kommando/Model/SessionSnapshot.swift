@@ -12,6 +12,8 @@ import Foundation
 struct TabSnapshot: Codable {
     var id: String
     var title: String
+    /// User-supplied name; optional so older saved sessions decode cleanly.
+    var customTitle: String?
     var tree: PaneNode
     var focusedLeafId: String
 }

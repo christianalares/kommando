@@ -13,9 +13,20 @@ import AppKit
 @Observable
 final class Tab: Identifiable {
     let id: String
+    /// Auto-derived title that tracks the focused pane's folder.
     var title: String
+    /// User-supplied name; when set it overrides the auto-derived `title`.
+    var customTitle: String?
     var tree: PaneNode
     var focusedLeafId: String
+
+    /// What the tab bar shows: the custom name if the user set one, else the auto title.
+    var displayTitle: String {
+        if let customTitle, !customTitle.isEmpty {
+            return customTitle
+        }
+        return title
+    }
 
     init(kind: PaneKind = .terminal) {
         let leaf = PaneNode.newLeaf(kind)
@@ -25,6 +36,13 @@ final class Tab: Identifiable {
         self.title = kind == .repl ? "Inspector" : "Shell"
     }
 
+    init(tree: PaneNode, focusedLeafId: String) {
+        self.id = UUID().uuidString
+        self.tree = tree
+        self.focusedLeafId = focusedLeafId
+        self.title = tree.firstLeafKind == .repl ? "Inspector" : "Shell"
+    }
+
     init(restoring snapshot: TabSnapshot) {
         self.id = snapshot.id
         self.tree = snapshot.tree
@@ -32,7 +50,16 @@ final class Tab: Identifiable {
             ? snapshot.focusedLeafId
             : snapshot.tree.firstLeafId
         self.title = snapshot.title
+        self.customTitle = snapshot.customTitle
     }
+}
+
+/// Something currently being dragged across the tab strip / pane area.
+enum DragItem: Equatable {
+    /// A whole tab, detached below the strip to be dropped into the pane area.
+    case tab(id: String)
+    /// A single pane (leaf), dragged to another pane or up to the strip.
+    case pane(leafId: String)
 }
 
 @MainActor
@@ -41,6 +68,31 @@ final class AppModel {
     var tabs: [Tab] = []
     var activeTabId: String = ""
     var aiPromptVisible = false
+
+    // MARK: - Drag state (cross-view: tab→pane and pane→pane/tab)
+    /// What is currently being dragged (a whole tab detached into the pane area, or a pane).
+    var drag: DragItem?
+    /// Cursor location in global coordinates during a drag.
+    var dragLocation: CGPoint = .zero
+    /// True when the cursor is over the tab strip (a pane dropped here pops out to a tab).
+    var dragOverStrip = false
+    /// The tab strip's global frame, used to detect drops onto the strip.
+    var stripFrame: CGRect = .zero
+    /// The resolved pane drop target (pane + edge) the content overlay highlights.
+    var paneDropTarget: PaneDropTarget?
+
+    /// The leaf id being dragged, if the current drag is a pane (used to exclude it as a
+    /// drop target and to dim it while dragging).
+    var draggedPaneLeafId: String? {
+        if case .pane(let id) = drag { return id }
+        return nil
+    }
+
+    func endDrag() {
+        drag = nil
+        dragOverStrip = false
+        paneDropTarget = nil
+    }
 
     /// Bumped on any structural change worth persisting (tabs/panes/fractions/focus/title).
     private(set) var revision = 0
@@ -92,7 +144,7 @@ final class AppModel {
         }
         let snapshot = SessionSnapshot(
             tabs: tabs.map {
-                TabSnapshot(id: $0.id, title: $0.title, tree: $0.tree, focusedLeafId: $0.focusedLeafId)
+                TabSnapshot(id: $0.id, title: $0.title, customTitle: $0.customTitle, tree: $0.tree, focusedLeafId: $0.focusedLeafId)
             },
             activeTabId: activeTabId,
             directories: directories
@@ -156,6 +208,93 @@ final class AppModel {
         let count = tabs.count
         let next = ((current + delta) % count + count) % count
         activeTabId = tabs[next].id
+        bump()
+    }
+
+    /// Sets a tab's custom name. An empty/whitespace name clears it, reverting to the
+    /// auto-derived folder title.
+    func renameTab(id: String, to newTitle: String) {
+        guard let tab = tabs.first(where: { $0.id == id }) else { return }
+        let trimmed = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        tab.customTitle = trimmed.isEmpty ? nil : trimmed
+        if tab.customTitle == nil {
+            refreshTabTitle(tab)
+        }
+        bump()
+    }
+
+    /// Converts a whole tab into a pane of the target tab, inserting its pane tree against
+    /// the dropped-on pane. The dragged tab's sessions are preserved (moved, not disposed).
+    func convertTabToPane(draggedTabId: String, into targetTabId: String, target: PaneDropTarget) {
+        guard draggedTabId != targetTabId,
+              let draggedTab = tabs.first(where: { $0.id == draggedTabId }),
+              let targetTab = tabs.first(where: { $0.id == targetTabId }),
+              targetTab.tree.leafIds.contains(target.leafId) else {
+            return
+        }
+        let subtree = draggedTab.tree
+        targetTab.tree = targetTab.tree.inserting(subtree, nextTo: target.leafId, edge: target.edge)
+        targetTab.focusedLeafId = subtree.firstLeafId
+        removeTabPreservingSessions(id: draggedTabId)
+        activeTabId = targetTabId
+        bump()
+    }
+
+    /// Moves a pane (leaf) next to another pane within the same tab. Sessions are preserved
+    /// (the leaf id is just relocated in the tree). For two panes this reads as a swap.
+    func movePane(leafId: String, to target: PaneDropTarget) {
+        guard leafId != target.leafId,
+              let tab = tabs.first(where: { $0.tree.leafIds.contains(leafId) }),
+              tab.tree.leafIds.contains(target.leafId),
+              let kind = tab.tree.kind(of: leafId),
+              let pruned = tab.tree.removingLeaf(leafId) else {
+            return
+        }
+        let subtree = PaneNode.leaf(id: leafId, kind: kind)
+        tab.tree = pruned.inserting(subtree, nextTo: target.leafId, edge: target.edge)
+        tab.focusedLeafId = leafId
+        bump()
+    }
+
+    /// Pops a pane out of its tab into a brand-new tab, preserving its session.
+    func movePaneToNewTab(leafId: String) {
+        guard let tab = tabs.first(where: { $0.tree.leafIds.contains(leafId) }),
+              tab.tree.leafIds.count > 1,
+              let kind = tab.tree.kind(of: leafId),
+              let pruned = tab.tree.removingLeaf(leafId) else {
+            return
+        }
+        tab.tree = pruned
+        if tab.focusedLeafId == leafId {
+            tab.focusedLeafId = pruned.firstLeafId
+        }
+        let newTab = Tab(tree: .leaf(id: leafId, kind: kind), focusedLeafId: leafId)
+        tabs.append(newTab)
+        activeTabId = newTab.id
+        bump()
+    }
+
+    /// Removes a tab from the strip WITHOUT disposing its sessions (they live on elsewhere,
+    /// e.g. after being merged into another tab as panes).
+    private func removeTabPreservingSessions(id: String) {
+        guard let idx = tabs.firstIndex(where: { $0.id == id }) else { return }
+        tabs.remove(at: idx)
+        if activeTabId == id, !tabs.isEmpty {
+            activeTabId = tabs[max(0, idx - 1)].id
+        }
+    }
+
+    /// Reorders a tab to a new index. `toIndex` is interpreted in the array *after* the
+    /// tab has been removed (i.e. the insertion slot among the remaining tabs).
+    func moveTab(id: String, toIndex: Int) {
+        guard let fromIndex = tabs.firstIndex(where: { $0.id == id }) else { return }
+        let moved = tabs.remove(at: fromIndex)
+        let insertAt = max(0, min(toIndex, tabs.count))
+        guard insertAt != fromIndex else {
+            tabs.insert(moved, at: fromIndex)
+            return
+        }
+        tabs.insert(moved, at: insertAt)
         bump()
     }
 
@@ -308,13 +447,13 @@ final class AppModel {
         if tab.tree.kind(of: leafId) == .terminal {
             let session = SessionRegistry.shared.existingTerminalSession(for: leafId)
             return TabContext(
-                tabTitle: tab.title,
+                tabTitle: tab.displayTitle,
                 cwd: session?.resolvedDirectory,
                 shell: shell,
                 output: session?.snapshotOutput(maxLines: 80) ?? ""
             )
         }
-        return TabContext(tabTitle: tab.title, cwd: nil, shell: shell, output: "")
+        return TabContext(tabTitle: tab.displayTitle, cwd: nil, shell: shell, output: "")
     }
 
     /// Executes a tool requested by the assistant against the focused terminal pane.

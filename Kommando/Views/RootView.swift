@@ -82,6 +82,7 @@ struct RootView: View {
             chromeBackground
         }
         .ignoresSafeArea(.container, edges: .top)
+        .overlay { tabDragPreview }
         .preferredColorScheme(preferredScheme)
         .background(WindowCloseHandler(model: model))
         .background(WindowFullScreenObserver(isFullScreen: $isFullScreen))
@@ -99,6 +100,59 @@ struct RootView: View {
         }
         .onChange(of: systemColorScheme) {
             SessionRegistry.shared.applyThemeToAll()
+        }
+    }
+
+    /// A small chip that follows the cursor while a tab or pane is dragged.
+    @ViewBuilder
+    private var tabDragPreview: some View {
+        if let info = dragChipInfo() {
+            GeometryReader { geo in
+                let origin = geo.frame(in: .global).origin
+                let local = CGPoint(
+                    x: model.dragLocation.x - origin.x,
+                    y: model.dragLocation.y - origin.y
+                )
+                HStack(spacing: 6) {
+                    Image(systemName: info.icon)
+                        .font(.system(size: 11, weight: .medium))
+                    Text(info.label)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 30)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.primary.opacity(0.15))
+                )
+                .shadow(radius: 8, y: 2)
+                .position(local)
+                .opacity(0.95)
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Icon + label for the floating drag chip, for whichever item is currently dragged.
+    private func dragChipInfo() -> (icon: String, label: String)? {
+        guard let drag = model.drag else { return nil }
+        switch drag {
+        case .tab(let id):
+            guard let tab = model.tabs.first(where: { $0.id == id }) else { return nil }
+            let icon = tab.tree.firstLeafKind == .repl
+                ? "chevron.left.forwardslash.chevron.right"
+                : "apple.terminal"
+            return (icon, tab.displayTitle)
+        case .pane(let leafId):
+            let kind = model.activeTab?.tree.kind(of: leafId)
+            let icon = kind == .repl
+                ? "chevron.left.forwardslash.chevron.right"
+                : "apple.terminal"
+            let label = SessionRegistry.shared.existingTerminalSession(for: leafId)?.title
+                ?? (kind == .repl ? "Inspector" : "Shell")
+            return (icon, label)
         }
     }
 
@@ -125,6 +179,9 @@ struct RootView: View {
                     .opacity(0.4)
             }
             .background(TrafficLightConfigurator(barHeight: titleBarHeight))
+            // The window is non-movable (so tab drags don't move it); this restores
+            // window dragging from the empty title-bar background around the tabs.
+            .background(WindowDragArea())
 
             if model.aiPromptVisible {
                 VStack {
