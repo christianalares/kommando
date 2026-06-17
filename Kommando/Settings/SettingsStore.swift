@@ -42,6 +42,7 @@ final class SettingsStore {
         static let cursorStyle = "cursorStyle"
         static let cursorBlink = "cursorBlink"
         static let colorScheme = "colorScheme"
+        static let reduceTransparency = "reduceTransparency"
         static let aiProvider = "aiProvider"
         static let shortcuts = "shortcutOverrides"
         static let userCommands = "userCommands"
@@ -62,6 +63,9 @@ final class SettingsStore {
     var cursorStyle: TerminalCursorStyle { didSet { persist(); bump() } }
     var cursorBlink: Bool { didSet { persist(); bump() } }
     var colorSchemeId: String { didSet { persist(); bump() } }
+    /// When on, the terminal + window chrome paint a solid theme color instead of the
+    /// translucent vibrancy material, so theme backgrounds can be matched pixel-exactly.
+    var reduceTransparency: Bool { didSet { persist(); bump() } }
     var aiProvider: AIProvider { didSet { persist(); bump() } }
 
     private let defaults = UserDefaults.standard
@@ -83,6 +87,7 @@ final class SettingsStore {
         cursorStyle = TerminalCursorStyle(rawValue: defaults.string(forKey: Key.cursorStyle) ?? "") ?? .block
         cursorBlink = defaults.object(forKey: Key.cursorBlink) as? Bool ?? true
         colorSchemeId = defaults.string(forKey: Key.colorScheme) ?? "system"
+        reduceTransparency = defaults.object(forKey: Key.reduceTransparency) as? Bool ?? false
         aiProvider = AIProvider(rawValue: defaults.string(forKey: Key.aiProvider) ?? "") ?? .anthropic
 
         if let data = defaults.data(forKey: Key.shortcuts),
@@ -187,6 +192,7 @@ final class SettingsStore {
         defaults.set(cursorStyle.rawValue, forKey: Key.cursorStyle)
         defaults.set(cursorBlink, forKey: Key.cursorBlink)
         defaults.set(colorSchemeId, forKey: Key.colorScheme)
+        defaults.set(reduceTransparency, forKey: Key.reduceTransparency)
         defaults.set(aiProvider.rawValue, forKey: Key.aiProvider)
     }
 

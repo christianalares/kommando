@@ -214,6 +214,11 @@ final class TerminalSession: Identifiable {
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
         env["LANG"] = env["LANG"] ?? "en_US.UTF-8"
+        // Advertise the theme's lightness so apps that read COLORFGBG (instead of querying
+        // OSC 11) pick the right light/dark variant. Format is "foreground;background" as
+        // ANSI indices; a dark background reads as 0, a light one as 15.
+        let isDark = TerminalThemes.resolved(schemeId: SettingsStore.shared.colorSchemeId).isDark
+        env["COLORFGBG"] = isDark ? "15;0" : "0;15"
         // Blank zsh's partial-line indicator (inverted "%"), same trick as the Glaze build.
         env["PROMPT_EOL_MARK"] = ""
         env.removeValue(forKey: "ELECTRON_RUN_AS_NODE")

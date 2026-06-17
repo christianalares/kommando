@@ -45,6 +45,21 @@ struct RootView: View {
             : Color(red: 246 / 255, green: 247 / 255, blue: 250 / 255)
     }
 
+    /// The window background: a solid theme color when the user opts out of transparency,
+    /// otherwise the frosted vibrancy material tinted to match the terminal.
+    @ViewBuilder
+    private var chromeBackground: some View {
+        if settings.reduceTransparency {
+            backgroundTint.ignoresSafeArea()
+        } else {
+            ZStack {
+                VisualEffectView(material: .underWindowBackground)
+                backgroundTint.opacity(0.55)
+            }
+            .ignoresSafeArea()
+        }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             mainColumn
@@ -61,13 +76,9 @@ struct RootView: View {
             }
         }
         .background {
-            // Fill the whole window (including the 1px resize-handle seam) with the frosted
-            // chrome so no transparent gap shows the desktop through.
-            ZStack {
-                VisualEffectView(material: .underWindowBackground)
-                backgroundTint.opacity(0.55)
-            }
-            .ignoresSafeArea()
+            // Fill the whole window (including the 1px resize-handle seam) with the chrome
+            // so no transparent gap shows the desktop through.
+            chromeBackground
         }
         .ignoresSafeArea(.container, edges: .top)
         .preferredColorScheme(preferredScheme)
@@ -90,14 +101,8 @@ struct RootView: View {
 
     private var mainColumn: some View {
         ZStack(alignment: .topLeading) {
-            VisualEffectView(material: .underWindowBackground)
-                .ignoresSafeArea()
-
-            // Tint the frosted background to match the theme (dark blue / near-white).
-            backgroundTint
-                .opacity(0.55)
+            chromeBackground
                 .allowsHitTesting(false)
-                .ignoresSafeArea()
 
             if let tab = model.activeTab {
                 PaneTreeView(tab: tab, model: model)

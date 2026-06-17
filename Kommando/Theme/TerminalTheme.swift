@@ -14,7 +14,11 @@ struct TerminalThemeDef: Identifiable {
     let name: String
     /// Whether this is a dark scheme; drives the app chrome (window tint, SwiftUI color scheme).
     let isDark: Bool
+    /// Rendered cell background. `.clear` lets the window vibrancy show through (default look).
     let background: NSColor
+    /// The opaque color the frosted background reads as. Used for OSC 10/11 theme reporting
+    /// (so apps detect light/dark) and as the fill when "Reduce transparency" is on.
+    let solidBackground: NSColor
     let foreground: NSColor
     let cursor: NSColor
     let ansi: [SwiftTerm.Color]
@@ -56,6 +60,7 @@ enum TerminalThemes {
         name: "Dark",
         isDark: true,
         background: .clear,
+        solidBackground: .rgb(0x282935),
         foreground: .rgb(0xe5e9f0),
         cursor: .rgb(0x89b4fa),
         ansi: tango
@@ -66,6 +71,7 @@ enum TerminalThemes {
         name: "Light",
         isDark: false,
         background: .clear,
+        solidBackground: .rgb(0xf6f7fa),
         foreground: .rgb(0x1c1c1e),
         cursor: .rgb(0x1e66f5),
         ansi: tango
@@ -98,18 +104,38 @@ enum TerminalTheming {
         // whatever colors the user's programs expect (e.g. zsh-autosuggestions' dark ANSI 8).
         // Leaving SwiftTerm's standard xterm palette in place keeps those colors legible and
         // matches what other terminals show.
-        view.nativeForegroundColor = theme.foreground
-        view.nativeBackgroundColor = theme.background
-        view.caretColor = theme.cursor
 
-        // SwiftTerm only uses nativeBackgroundColor for cell fills; the layer-backed view
-        // keeps its own opaque layer background. Sync it so a clear/translucent theme
-        // actually shows the window's vibrancy and sits flush with the frame.
+        // Set the *terminal's* fg/bg to truthful opaque colors first. These drive OSC 10/11
+        // color queries, so apps (e.g. Claude Code) can detect light vs. dark — independent of
+        // how we actually render the background below. (Assigning these notifies SwiftTerm's
+        // delegate, which also sets the native colors, so we override the native bg afterwards.)
+        let terminal = view.getTerminal()
+        terminal.foregroundColor = swiftTermColor(theme.foreground)
+        terminal.backgroundColor = swiftTermColor(theme.solidBackground)
+
+        // Rendered background: solid theme color when the user opts out of transparency,
+        // otherwise `.clear` so the window's vibrancy shows through and the terminal sits
+        // flush with the frame. SwiftTerm uses nativeBackgroundColor for cell fills; the
+        // layer-backed view keeps its own opaque layer background, so sync both.
+        let renderedBackground = settings.reduceTransparency ? theme.solidBackground : theme.background
+        view.nativeForegroundColor = theme.foreground
+        view.nativeBackgroundColor = renderedBackground
+        view.caretColor = theme.cursor
         view.wantsLayer = true
-        view.layer?.backgroundColor = theme.background.cgColor
+        view.layer?.backgroundColor = renderedBackground.cgColor
 
         let swiftTermStyle = cursorStyle(settings.cursorStyle, blink: settings.cursorBlink)
         view.getTerminal().setCursorStyle(swiftTermStyle)
+    }
+
+    /// Converts an `NSColor` into SwiftTerm's 16-bit-per-channel `Color` for OSC reporting.
+    private static func swiftTermColor(_ color: NSColor) -> SwiftTerm.Color {
+        let c = color.usingColorSpace(.sRGB) ?? color
+        return SwiftTerm.Color(
+            red: UInt16(c.redComponent * 65535),
+            green: UInt16(c.greenComponent * 65535),
+            blue: UInt16(c.blueComponent * 65535)
+        )
     }
 
     /// Resolves a font by PostScript name, then by family name (e.g. "MesloLGS NF"),

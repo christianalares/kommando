@@ -40,6 +40,14 @@ private struct AppearanceSettingsView: View {
                     Text(theme.name).tag(theme.id)
                 }
             }
+
+            Section {
+                Toggle("Reduce transparency", isOn: $settings.reduceTransparency)
+            } footer: {
+                Text("Paint a solid background instead of the frosted material, so apps that draw their own colored blocks can match the terminal background exactly.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
