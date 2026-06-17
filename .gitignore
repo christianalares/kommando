@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Xcode build output
+build/
+DerivedData/
+*.profraw
+
+# Xcode user-specific state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Misc
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
