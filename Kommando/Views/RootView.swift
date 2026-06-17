@@ -13,6 +13,7 @@ struct RootView: View {
     @Environment(SettingsStore.self) private var settings
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var model = AppModel()
+    @State private var isFullScreen = false
     @AppStorage("aiSidebarWidth") private var sidebarWidth: Double = 360
 
     private let titleBarHeight: CGFloat = 46
@@ -83,6 +84,8 @@ struct RootView: View {
         .ignoresSafeArea(.container, edges: .top)
         .preferredColorScheme(preferredScheme)
         .background(WindowCloseHandler(model: model))
+        .background(WindowFullScreenObserver(isFullScreen: $isFullScreen))
+        .animation(.easeOut(duration: 0.2), value: isFullScreen)
         .environment(model)
         .focusedSceneValue(\.appModel, model)
         .onAppear { model.bootstrap() }
@@ -114,7 +117,9 @@ struct RootView: View {
             VStack(spacing: 0) {
                 TabBarView(model: model)
                     .frame(height: titleBarHeight)
-                    .padding(.leading, 84) // clear the traffic lights
+                    // Reserve room for the traffic lights, except in fullscreen where macOS
+                    // hides them — then the tabs slide left into that space.
+                    .padding(.leading, isFullScreen ? 12 : 84)
                     .padding(.trailing, 8)
                 Divider()
                     .opacity(0.4)
@@ -172,6 +177,54 @@ private struct WindowCloseHandler: NSViewRepresentable {
 
         deinit {
             if let token {
+                NotificationCenter.default.removeObserver(token)
+            }
+        }
+    }
+}
+
+/// Tracks whether the hosting window is in macOS fullscreen and publishes it back to the
+/// view, so the tab bar can reclaim the traffic-light gap when the lights are hidden.
+private struct WindowFullScreenObserver: NSViewRepresentable {
+    @Binding var isFullScreen: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { [weak view] in
+            guard let window = view?.window else { return }
+            context.coordinator.observe(window) { value in
+                isFullScreen = value
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        private var tokens: [NSObjectProtocol] = []
+
+        func observe(_ window: NSWindow, update: @escaping (Bool) -> Void) {
+            guard tokens.isEmpty else { return }
+            update(window.styleMask.contains(.fullScreen))
+
+            let nc = NotificationCenter.default
+            tokens.append(
+                nc.addObserver(forName: NSWindow.didEnterFullScreenNotification, object: window, queue: .main) { _ in
+                    MainActor.assumeIsolated { update(true) }
+                }
+            )
+            tokens.append(
+                nc.addObserver(forName: NSWindow.didExitFullScreenNotification, object: window, queue: .main) { _ in
+                    MainActor.assumeIsolated { update(false) }
+                }
+            )
+        }
+
+        deinit {
+            for token in tokens {
                 NotificationCenter.default.removeObserver(token)
             }
         }
