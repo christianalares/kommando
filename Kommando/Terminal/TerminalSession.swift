@@ -56,6 +56,9 @@ final class TerminalSession: Identifiable {
             self?.rescanJSON()
             self?.checkDirectoryChange()
         }
+        terminalView.currentDirectoryProvider = { [weak self] in
+            self?.resolvedDirectory
+        }
         TerminalTheming.apply(SettingsStore.shared, to: terminalView)
     }
 

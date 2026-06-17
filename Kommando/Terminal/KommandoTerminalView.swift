@@ -11,9 +11,18 @@ import SwiftTerm
 
 final class KommandoTerminalView: LocalProcessTerminalView {
     var onContentChange: (() -> Void)?
+    /// Supplies the shell's current working directory so relative paths can be resolved
+    /// for ⌘-click link detection.
+    var currentDirectoryProvider: (() -> String?)?
 
     private var rescanScheduled = false
     private var lastLaidOutSize: CGSize = .zero
+
+    // MARK: - ⌘-click links
+    private var commandHeld = false
+    private var hoveredLink: TerminalLink?
+    private var hoveredRow: Int?
+    private let linkUnderline = LinkUnderlineView()
 
     private weak var cachedScroller: NSScroller?
     private var scrollerHideWork: DispatchWorkItem?
@@ -68,6 +77,11 @@ final class KommandoTerminalView: LocalProcessTerminalView {
         forceRedraw()
         configureScroller()
         installKeyMonitor()
+        installMouseMonitor()
+        if linkUnderline.superview == nil {
+            linkUnderline.isHidden = true
+            addSubview(linkUnderline)
+        }
     }
 
     func forceRedraw() {
@@ -81,6 +95,7 @@ final class KommandoTerminalView: LocalProcessTerminalView {
     }
 
     private var keyMonitor: Any?
+    private var mouseMonitor: Any?
 
     // Native macOS text-navigation: ⌥← / ⌥→ move by word, ⌘← / ⌘→ jump to line start/end,
     // ⌥⌫ deletes the previous word, ⌘⌫ deletes to the line start. SwiftTerm's keyDown isn't
@@ -119,19 +134,154 @@ final class KommandoTerminalView: LocalProcessTerminalView {
         }
     }
 
+    // SwiftTerm already manages mouse tracking and an OSC-8 hyperlink preview while ⌘ is
+    // held; we layer on detection of plain-text URLs and on-disk paths so those become
+    // clickable too, with an underline + pointing-hand cursor as hover feedback. SwiftTerm's
+    // mouse handlers aren't open for override, so (like the key handling above) we observe
+    // via a local monitor while ⌘ is held.
+    private func installMouseMonitor() {
+        guard mouseMonitor == nil else { return }
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.mouseMoved, .leftMouseUp, .flagsChanged]
+        ) { [weak self] event in
+            guard let self else { return event }
+            return self.handleMouse(event)
+        }
+    }
+
+    private func handleMouse(_ event: NSEvent) -> NSEvent? {
+        guard event.window === window, window != nil else { return event }
+
+        switch event.type {
+        case .flagsChanged:
+            commandHeld = event.modifierFlags.contains(.command)
+            if commandHeld {
+                updateHoveredLink(at: currentMouseLocation())
+            } else {
+                clearHoveredLink()
+            }
+            return event
+        case .mouseMoved:
+            if event.modifierFlags.contains(.command) {
+                updateHoveredLink(at: convert(event.locationInWindow, from: nil))
+            } else {
+                clearHoveredLink()
+            }
+            return event
+        case .leftMouseUp:
+            if event.modifierFlags.contains(.command),
+               let link = link(at: convert(event.locationInWindow, from: nil)) {
+                open(link)
+                clearHoveredLink()
+                return nil
+            }
+            return event
+        default:
+            return event
+        }
+    }
+
+    private func currentMouseLocation() -> CGPoint {
+        guard let window else { return .zero }
+        return convert(window.mouseLocationOutsideOfEventStream, from: nil)
+    }
+
+    /// Maps a point in view coordinates to a detected link, skipping cells that already
+    /// carry a SwiftTerm OSC-8 payload (those are handled by the framework itself).
+    private func link(at point: CGPoint) -> TerminalLink? {
+        guard let (row, col) = cell(at: point) else { return nil }
+        let terminal = getTerminal()
+        guard let line = terminal.getLine(row: row) else { return nil }
+        if col < line.count, line[col].hasPayload {
+            return nil
+        }
+        let text = line.translateToString(trimRight: false)
+        return TerminalLinkDetector.link(in: text, atColumn: col, cwd: currentDirectoryProvider?())
+    }
+
+    private func updateHoveredLink(at point: CGPoint) {
+        guard let (row, _) = cell(at: point), let link = link(at: point) else {
+            clearHoveredLink()
+            return
+        }
+        if link != hoveredLink || row != hoveredRow {
+            hoveredLink = link
+            hoveredRow = row
+            positionUnderline(for: link, row: row)
+        }
+        NSCursor.pointingHand.set()
+    }
+
+    private func clearHoveredLink() {
+        guard hoveredLink != nil else { return }
+        hoveredLink = nil
+        hoveredRow = nil
+        linkUnderline.isHidden = true
+        NSCursor.iBeam.set()
+    }
+
+    private func positionUnderline(for link: TerminalLink, row: Int) {
+        let dim = cellDimensions()
+        let width = CGFloat(link.endColumn - link.startColumn) * dim.width
+        linkUnderline.strokeColor = nativeForegroundColor
+        linkUnderline.frame = CGRect(
+            x: CGFloat(link.startColumn) * dim.width,
+            y: frame.height - CGFloat(row + 1) * dim.height,
+            width: width,
+            height: dim.height
+        )
+        linkUnderline.isHidden = false
+        linkUnderline.needsDisplay = true
+    }
+
+    private func open(_ link: TerminalLink) {
+        switch link.target {
+        case .url(let url), .file(let url):
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// Converts a view-space point to a (screen row, column) cell, mirroring SwiftTerm's
+    /// own hit-testing so highlights line up with what the user sees.
+    private func cell(at point: CGPoint) -> (row: Int, col: Int)? {
+        guard bounds.contains(point) else { return nil }
+        let terminal = getTerminal()
+        let dim = cellDimensions()
+        guard dim.width > 0, dim.height > 0 else { return nil }
+        let col = Int(point.x / dim.width)
+        let row = Int((frame.height - point.y) / dim.height)
+        guard row >= 0, row < terminal.rows, col >= 0, col < terminal.cols else { return nil }
+        return (row, col)
+    }
+
+    /// Replicates SwiftTerm's font-derived cell metrics (it keeps them internal), so our
+    /// hit-testing and underline placement match the rendered grid exactly.
+    private func cellDimensions() -> (width: CGFloat, height: CGFloat) {
+        let f = font
+        let glyph = f.glyph(withName: "W")
+        let width = f.advancement(forGlyph: glyph).width
+        let height = ceil(CTFontGetAscent(f) + CTFontGetDescent(f) + CTFontGetLeading(f))
+        return (max(1, width), max(1, height))
+    }
+
     deinit {
         if let keyMonitor {
             NSEvent.removeMonitor(keyMonitor)
+        }
+        if let mouseMonitor {
+            NSEvent.removeMonitor(mouseMonitor)
         }
     }
 
     override func dataReceived(slice: ArraySlice<UInt8>) {
         super.dataReceived(slice: slice)
+        clearHoveredLink()
         scheduleRescan()
     }
 
     override func scrolled(source: TerminalView, position: Double) {
         super.scrolled(source: source, position: position)
+        clearHoveredLink()
         scheduleRescan()
         flashScroller()
     }
@@ -144,5 +294,24 @@ final class KommandoTerminalView: LocalProcessTerminalView {
             self.rescanScheduled = false
             self.onContentChange?()
         }
+    }
+}
+
+/// A thin overlay that draws an underline beneath a ⌘-hovered link span.
+private final class LinkUnderlineView: NSView {
+    var strokeColor: NSColor = .labelColor
+
+    override var isFlipped: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let thickness: CGFloat = 1
+        let y = max(thickness / 2, bounds.minY + thickness / 2)
+        let path = NSBezierPath()
+        path.lineWidth = thickness
+        path.move(to: CGPoint(x: 0, y: y))
+        path.line(to: CGPoint(x: bounds.width, y: y))
+        strokeColor.setStroke()
+        path.stroke()
     }
 }
