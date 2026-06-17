@@ -20,6 +20,12 @@ struct PaneTreeView: View {
 
     @State private var dragStart: [Double]?
 
+    /// Whether a pane in this tab is currently zoomed (and still exists in the tree).
+    private var isZoomActive: Bool {
+        guard let id = tab.zoomedLeafId else { return false }
+        return tab.tree.kind(of: id) != nil
+    }
+
     var body: some View {
         GeometryReader { geo in
             let result = PaneLayoutEngine.layout(
@@ -27,25 +33,45 @@ struct PaneTreeView: View {
                 in: CGRect(origin: .zero, size: geo.size),
                 dividerThickness: dividerThickness
             )
+            let anyZoom = isZoomActive
 
             ZStack(alignment: .topLeading) {
+                // Every leaf stays mounted in the same ForEach in both states, so the
+                // zoomed pane is only re-framed (not re-parented) — re-parenting blanks it.
                 ForEach(result.leaves) { leaf in
-                    PaneLeafView(leafId: leaf.id, kind: leaf.kind, tab: tab, model: model)
-                        .frame(width: leaf.rect.width, height: leaf.rect.height)
-                        .offset(x: leaf.rect.minX, y: leaf.rect.minY)
+                    PaneCell(
+                        leaf: leaf,
+                        fullSize: geo.size,
+                        isZoomed: tab.zoomedLeafId == leaf.id,
+                        anyZoom: anyZoom,
+                        tab: tab,
+                        model: model
+                    )
                 }
 
-                ForEach(result.dividers) { divider in
-                    DividerHandle(axis: divider.axis)
-                        .frame(width: divider.rect.width, height: divider.rect.height)
-                        .offset(x: divider.rect.minX, y: divider.rect.minY)
-                        .gesture(dividerGesture(divider))
+                if anyZoom {
+                    // A light dim just to separate the floating pane; click it to exit zoom.
+                    Color.black.opacity(0.15)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .contentShape(Rectangle())
+                        .onTapGesture { model.toggleZoomFocused() }
+                        .zIndex(1)
+                        .transition(.opacity)
                 }
 
-                if isContentDropActive,
-                   let target = model.paneDropTarget,
-                   let leaf = result.leaves.first(where: { $0.id == target.leafId }) {
-                    dropHighlight(rect: leaf.rect, edge: target.edge)
+                if !anyZoom {
+                    ForEach(result.dividers) { divider in
+                        DividerHandle(axis: divider.axis)
+                            .frame(width: divider.rect.width, height: divider.rect.height)
+                            .offset(x: divider.rect.minX, y: divider.rect.minY)
+                            .gesture(dividerGesture(divider))
+                    }
+
+                    if isContentDropActive,
+                       let target = model.paneDropTarget,
+                       let leaf = result.leaves.first(where: { $0.id == target.leafId }) {
+                        dropHighlight(rect: leaf.rect, edge: target.edge)
+                    }
                 }
             }
             .onChange(of: model.dragLocation) {
@@ -285,6 +311,68 @@ private struct DividerHandle: View {
     }
 }
 
+// MARK: - Pane cell
+
+/// One leaf in the tab, positioned from the layout. When zoomed it floats: inset from the
+/// edges, rounded, shadowed, and lifted above the dimming scrim. Keeping a single, stable
+/// view type for both states avoids re-parenting (which blanks the terminal).
+private struct PaneCell: View {
+    let leaf: LeafFrame
+    let fullSize: CGSize
+    let isZoomed: Bool
+    let anyZoom: Bool
+    let tab: Tab
+    let model: AppModel
+
+    /// How far the floating pane insets from the window edges when zoomed.
+    private let zoomInset: CGFloat = 18
+    /// Inner breathing room so the prompt doesn't sit flush against the rounded border.
+    private let zoomContentPadding: CGFloat = 12
+
+    var body: some View {
+        let rect = displayRect
+        let corner: CGFloat = isZoomed ? 12 : 0
+
+        PaneLeafView(leafId: leaf.id, kind: leaf.kind, tab: tab, model: model)
+            .padding(isZoomed ? zoomContentPadding : 0)
+            .frame(width: rect.width, height: rect.height)
+            // Near-opaque, theme-matched backing so the floating pane reads as a solid
+            // surface on top of the others rather than a translucent overlay.
+            .background(zoomBacking)
+            .clipShape(RoundedRectangle(cornerRadius: corner))
+            .overlay(
+                RoundedRectangle(cornerRadius: corner)
+                    .strokeBorder(Color.white.opacity(isZoomed ? 0.08 : 0), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(isZoomed ? 0.4 : 0),
+                    radius: isZoomed ? 26 : 0, y: isZoomed ? 12 : 0)
+            .offset(x: rect.minX, y: rect.minY)
+            // Background panes stay put behind the scrim; the zoomed one floats on top.
+            .zIndex(isZoomed ? 2 : 0)
+            .allowsHitTesting(anyZoom ? isZoomed : true)
+    }
+
+    @ViewBuilder
+    private var zoomBacking: some View {
+        if isZoomed {
+            Color(nsColor: TerminalThemes.resolved(schemeId: SettingsStore.shared.colorSchemeId).solidBackground)
+                .opacity(0.97)
+        } else {
+            Color.clear
+        }
+    }
+
+    private var displayRect: CGRect {
+        guard isZoomed else { return leaf.rect }
+        return CGRect(
+            x: zoomInset,
+            y: zoomInset,
+            width: max(0, fullSize.width - zoomInset * 2),
+            height: max(0, fullSize.height - zoomInset * 2)
+        )
+    }
+}
+
 // MARK: - Pane hover tracking
 
 /// Transparent overlay that reports whether the cursor is over the pane. Uses an AppKit
@@ -357,9 +445,10 @@ private struct PaneLeafView: View {
     }
 
     /// A handle is only useful when the tab has more than one pane (so there's somewhere
-    /// to rearrange to, or another pane to pop out from).
+    /// to rearrange to, or another pane to pop out from), and not while a pane is zoomed
+    /// (only one pane is visible then, so there's nowhere to drag).
     private var showsHandle: Bool {
-        tab.tree.leafIds.count > 1
+        tab.tree.leafIds.count > 1 && tab.zoomedLeafId == nil
     }
 
     private var isBeingDragged: Bool {

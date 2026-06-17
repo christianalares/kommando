@@ -19,6 +19,9 @@ final class Tab: Identifiable {
     var customTitle: String?
     var tree: PaneNode
     var focusedLeafId: String
+    /// When set (and present in the tree), this leaf is temporarily shown full-window,
+    /// hiding the other panes. Transient — not persisted across launches.
+    var zoomedLeafId: String?
 
     /// What the tab bar shows: the custom name if the user set one, else the auto title.
     var displayTitle: String {
@@ -300,8 +303,24 @@ final class AppModel {
 
     // MARK: - Splits
 
+    /// Toggles full-window zoom for the focused pane of the active tab. Pressing once
+    /// maximizes it; pressing again restores the previous split layout.
+    func toggleZoomFocused() {
+        guard let tab = activeTab else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            if tab.zoomedLeafId == tab.focusedLeafId {
+                tab.zoomedLeafId = nil
+            } else if tab.tree.leafIds.contains(tab.focusedLeafId) {
+                tab.zoomedLeafId = tab.focusedLeafId
+            }
+        }
+        bump()
+    }
+
     func splitActive(axis: SplitAxis, kind: PaneKind = .terminal) {
         guard let tab = activeTab else { return }
+        // Splitting while zoomed would hide the new pane; restore the layout first.
+        tab.zoomedLeafId = nil
         let inheritedDirectory = kind == .terminal ? currentTerminalDirectory() : nil
         let newLeafId = UUID().uuidString
         tab.tree = tab.tree.splittingLeaf(tab.focusedLeafId, axis: axis, newKind: kind, newLeafId: newLeafId)

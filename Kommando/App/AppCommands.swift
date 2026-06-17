@@ -96,6 +96,12 @@ struct AppCommands: Commands {
             shortcutButton("New Horizontal Pane", .splitRight) { $0.splitActive(axis: .horizontal) }
             shortcutButton("New Vertical Pane", .splitDown) { $0.splitActive(axis: .vertical) }
 
+            Button("Zoom Pane") {
+                model?.toggleZoomFocused()
+            }
+            .keyboardShortcut(.return, modifiers: [.command, .shift])
+            .disabled(model == nil)
+
             Divider()
 
             shortcutButton("Navigate Pane Left", .focusPaneLeft) { $0.focusPane(.left) }
