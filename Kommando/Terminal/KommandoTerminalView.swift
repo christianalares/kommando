@@ -96,6 +96,7 @@ final class KommandoTerminalView: LocalProcessTerminalView {
 
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
+    private var wheelScrollAccumulator: CGFloat = 0
 
     // Native macOS text-navigation: ⌥← / ⌥→ move by word, ⌘← / ⌘→ jump to line start/end,
     // ⌥⌫ deletes the previous word, ⌘⌫ deletes to the line start. SwiftTerm's keyDown isn't
@@ -142,7 +143,7 @@ final class KommandoTerminalView: LocalProcessTerminalView {
     private func installMouseMonitor() {
         guard mouseMonitor == nil else { return }
         mouseMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.mouseMoved, .leftMouseUp, .flagsChanged]
+            matching: [.mouseMoved, .leftMouseUp, .flagsChanged, .scrollWheel]
         ) { [weak self] event in
             guard let self else { return event }
             return self.handleMouse(event)
@@ -176,6 +177,13 @@ final class KommandoTerminalView: LocalProcessTerminalView {
                 return nil
             }
             return event
+        case .scrollWheel:
+            let point = convert(event.locationInWindow, from: nil)
+            guard bounds.contains(point), allowMouseReporting, appWantsMouseReporting else {
+                return event
+            }
+            forwardWheelEvent(event)
+            return nil
         default:
             return event
         }
@@ -262,6 +270,76 @@ final class KommandoTerminalView: LocalProcessTerminalView {
         let width = f.advancement(forGlyph: glyph).width
         let height = ceil(CTFontGetAscent(f) + CTFontGetDescent(f) + CTFontGetLeading(f))
         return (max(1, width), max(1, height))
+    }
+
+    // MARK: - Mouse-wheel reporting
+    //
+    // SwiftTerm's own `scrollWheel` always drives local scrollback and never forwards wheel
+    // notches to apps that requested mouse tracking (DECSET 1000/1002/1003), and it isn't
+    // `open` so we can't override it. That breaks wheel scrolling inside full-screen TUIs
+    // (vim, htop, less, Claude Code fullscreen). So — like the key handling above — we observe
+    // scroll events via the local monitor: when the app under the cursor has enabled mouse
+    // reporting we translate the wheel into xterm wheel button reports (Cb 64 = up, 65 = down)
+    // and consume the event; otherwise we let SwiftTerm do its native scrollback.
+    private var appWantsMouseReporting: Bool {
+        switch getTerminal().mouseMode {
+        case .off:
+            return false
+        default:
+            return true
+        }
+    }
+
+    private func forwardWheelEvent(_ event: NSEvent) {
+        if event.phase.contains(.began) || event.momentumPhase.contains(.began) {
+            wheelScrollAccumulator = 0
+        }
+
+        let dim = cellDimensions()
+        let rawDelta: CGFloat
+        if event.hasPreciseScrollingDeltas {
+            // Trackpads: one report per row of travel feels natural.
+            rawDelta = event.scrollingDeltaY / max(1, dim.height)
+        } else if event.scrollingDeltaY != 0 {
+            // Discrete wheels: a few reports per notch matches other terminals.
+            rawDelta = event.scrollingDeltaY * 3
+        } else {
+            rawDelta = event.deltaY * 3
+        }
+        guard rawDelta != 0 else {
+            return
+        }
+
+        wheelScrollAccumulator += rawDelta
+        var steps = Int(wheelScrollAccumulator)
+        guard steps != 0 else {
+            return
+        }
+        wheelScrollAccumulator -= CGFloat(steps)
+
+        let scrollingUp = steps > 0
+        steps = min(abs(steps), 10) // cap bursts from fast flicks
+
+        let terminal = getTerminal()
+        let point = convert(event.locationInWindow, from: nil)
+        let col = max(0, min(terminal.cols - 1, Int(point.x / dim.width)))
+        let row = max(0, min(terminal.rows - 1, Int((frame.height - point.y) / dim.height)))
+
+        let modifiers = event.modifierFlags
+        var buttonFlags = scrollingUp ? 64 : 65
+        if modifiers.contains(.shift) {
+            buttonFlags += 4
+        }
+        if modifiers.contains(.option) {
+            buttonFlags += 8
+        }
+        if modifiers.contains(.control) {
+            buttonFlags += 16
+        }
+
+        for _ in 0..<steps {
+            terminal.sendEvent(buttonFlags: buttonFlags, x: col, y: row)
+        }
     }
 
     deinit {
