@@ -30,9 +30,11 @@ enum PaneEdge {
 }
 
 /// A resolved drop location: the pane being targeted and the edge to insert against.
+/// `edge == nil` means the cursor is over the pane's center — a request to swap the two
+/// panes' positions rather than insert a new split.
 struct PaneDropTarget: Equatable {
     let leafId: String
-    let edge: PaneEdge
+    let edge: PaneEdge?
 }
 
 indirect enum PaneNode: Identifiable, Codable, Equatable {
@@ -143,6 +145,25 @@ indirect enum PaneNode: Identifiable, Codable, Equatable {
                 $0.inserting(subtree, nextTo: leafId, edge: edge)
             }
             return .split(id: id, axis: axis, children: newChildren, fractions: fractions)
+        }
+    }
+
+    /// Returns a copy of the tree with two leaves' positions exchanged: their id+kind are
+    /// swapped in place, so the split structure and sizes stay identical while the sessions
+    /// they host trade slots.
+    func swappingLeaves(_ aId: String, _ aKind: PaneKind, _ bId: String, _ bKind: PaneKind) -> PaneNode {
+        switch self {
+        case .leaf(let id, _):
+            if id == aId { return .leaf(id: bId, kind: bKind) }
+            if id == bId { return .leaf(id: aId, kind: aKind) }
+            return self
+        case .split(let id, let axis, let children, let fractions):
+            return .split(
+                id: id,
+                axis: axis,
+                children: children.map { $0.swappingLeaves(aId, aKind, bId, bKind) },
+                fractions: fractions
+            )
         }
     }
 

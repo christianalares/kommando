@@ -67,11 +67,7 @@ struct PaneTreeView: View {
                             .gesture(dividerGesture(divider))
                     }
 
-                    if isContentDropActive,
-                       let target = model.paneDropTarget,
-                       let leaf = result.leaves.first(where: { $0.id == target.leafId }) {
-                        dropHighlight(rect: leaf.rect, edge: target.edge)
-                    }
+                    dropOverlays(result.leaves)
                 }
             }
             .onChange(of: model.dragLocation) {
@@ -103,19 +99,103 @@ struct PaneTreeView: View {
         model.drag != nil && !model.dragOverStrip
     }
 
+    /// Renders the drop-target highlight and, for swaps, the matching highlight on the pane
+    /// being dragged. For a swap, each pane shows an arrow pointing toward the other so the
+    /// exchange direction is obvious.
     @ViewBuilder
-    private func dropHighlight(rect: CGRect, edge: PaneEdge) -> some View {
-        let half = halfRect(rect, edge)
+    private func dropOverlays(_ leaves: [LeafFrame]) -> some View {
+        if isContentDropActive,
+           let target = model.paneDropTarget,
+           let targetLeaf = leaves.first(where: { $0.id == target.leafId }) {
+            let sourceLeaf = model.draggedPaneLeafId.flatMap { id in leaves.first { $0.id == id } }
+            let isSwap = target.edge == nil
+
+            // Dragged pane: points toward the target it will move to.
+            if let sourceLeaf {
+                swapPartnerHighlight(
+                    rect: sourceLeaf.rect,
+                    active: isSwap,
+                    arrowAngle: angle(from: sourceLeaf.rect, to: targetLeaf.rect)
+                )
+            }
+
+            // Target pane: for a swap, points back toward the dragged pane.
+            dropHighlight(
+                rect: targetLeaf.rect,
+                edge: target.edge,
+                swapArrowAngle: sourceLeaf.map { angle(from: targetLeaf.rect, to: $0.rect) }
+            )
+        }
+    }
+
+    /// The target pane's highlight. A single rectangle whose geometry morphs between an
+    /// edge half (insert) and a centered square (swap), so moving the cursor around animates
+    /// smoothly instead of cutting between shapes.
+    @ViewBuilder
+    private func dropHighlight(rect: CGRect, edge: PaneEdge?, swapArrowAngle: Angle?) -> some View {
+        let hl = highlightRect(rect, edge)
+        let isSwap = edge == nil
         RoundedRectangle(cornerRadius: 6)
-            .fill(Color.accentColor.opacity(0.22))
+            .fill(Color.accentColor.opacity(0.2))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(Color.accentColor, lineWidth: 2)
             )
-            .frame(width: half.width, height: half.height)
-            .offset(x: half.minX, y: half.minY)
+            .overlay(swapArrow(angle: swapArrowAngle).opacity(isSwap ? 1 : 0))
+            .frame(width: hl.width, height: hl.height)
+            .offset(x: hl.minX, y: hl.minY)
             .allowsHitTesting(false)
-            .animation(.easeOut(duration: 0.12), value: edge)
+            .animation(.easeOut(duration: 0.14), value: hl)
+            .animation(.easeOut(duration: 0.14), value: isSwap)
+    }
+
+    /// The matching highlight drawn on the pane being dragged while a swap is targeted, so
+    /// the user sees both participants. Dashed to distinguish it from the solid target.
+    @ViewBuilder
+    private func swapPartnerHighlight(rect: CGRect, active: Bool, arrowAngle: Angle) -> some View {
+        let hl = highlightRect(rect, nil)
+        RoundedRectangle(cornerRadius: 6)
+            .fill(Color.accentColor.opacity(0.12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(
+                        Color.accentColor.opacity(0.85),
+                        style: StrokeStyle(lineWidth: 2, dash: [6, 4])
+                    )
+            )
+            .overlay(swapArrow(angle: arrowAngle))
+            .frame(width: hl.width, height: hl.height)
+            .offset(x: hl.minX, y: hl.minY)
+            .opacity(active ? 1 : 0)
+            .allowsHitTesting(false)
+            .animation(.easeOut(duration: 0.14), value: active)
+            .animation(.easeOut(duration: 0.14), value: hl)
+    }
+
+    /// A single arrow glyph rotated to point in `angle` (0 = pointing right).
+    private func swapArrow(angle: Angle?) -> some View {
+        Image(systemName: "arrow.right")
+            .font(.system(size: 24, weight: .bold))
+            .foregroundStyle(Color.accentColor)
+            .rotationEffect(angle ?? .zero)
+    }
+
+    /// Direction from one rect's center to another's, as a rotation for `arrow.right`.
+    private func angle(from a: CGRect, to b: CGRect) -> Angle {
+        .radians(atan2(Double(b.midY - a.midY), Double(b.midX - a.midX)))
+    }
+
+    /// Geometry for a highlight: an edge half for inserts, or a centered square (with a fixed
+    /// margin on all sides) for a swap. A fixed inset keeps the margin even regardless of the
+    /// pane's aspect ratio; it's clamped so it never collapses on very small panes.
+    private func highlightRect(_ rect: CGRect, _ edge: PaneEdge?) -> CGRect {
+        guard let edge else {
+            let margin: CGFloat = 22
+            let dx = min(margin, rect.width * 0.35)
+            let dy = min(margin, rect.height * 0.35)
+            return rect.insetBy(dx: dx, dy: dy)
+        }
+        return halfRect(rect, edge)
     }
 
     private func updateDropTarget(leaves: [LeafFrame], contentFrame: CGRect) {
@@ -133,8 +213,12 @@ struct PaneTreeView: View {
             model.paneDropTarget = nil
             return
         }
-        let edge = edge(for: local, in: leaf.rect)
-        let target = PaneDropTarget(leafId: leaf.id, edge: edge)
+        // Pane drags get a central "swap" zone; tab drags only ever insert against an edge
+        // (there's no slot to swap a whole tab with).
+        let zone: PaneEdge? = model.draggedPaneLeafId != nil
+            ? dropZone(for: local, in: leaf.rect)
+            : edge(for: local, in: leaf.rect)
+        let target = PaneDropTarget(leafId: leaf.id, edge: zone)
         if model.paneDropTarget != target {
             model.paneDropTarget = target
         }
@@ -143,6 +227,20 @@ struct PaneTreeView: View {
     private func edge(for point: CGPoint, in rect: CGRect) -> PaneEdge {
         let dx = (point.x - rect.midX) / max(rect.width, 1)
         let dy = (point.y - rect.midY) / max(rect.height, 1)
+        if abs(dx) > abs(dy) {
+            return dx < 0 ? .leading : .trailing
+        }
+        return dy < 0 ? .top : .bottom
+    }
+
+    /// Like `edge(for:in:)` but returns `nil` when the cursor is over the pane's central
+    /// region, signalling a swap rather than an edge insert.
+    private func dropZone(for point: CGPoint, in rect: CGRect) -> PaneEdge? {
+        let dx = (point.x - rect.midX) / max(rect.width, 1)
+        let dy = (point.y - rect.midY) / max(rect.height, 1)
+        if abs(dx) < 0.2 && abs(dy) < 0.2 {
+            return nil
+        }
         if abs(dx) > abs(dy) {
             return dx < 0 ? .leading : .trailing
         }

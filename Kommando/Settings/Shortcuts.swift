@@ -13,32 +13,38 @@ import AppKit
 /// An action the user can rebind in Settings.
 enum ShortcutAction: String, CaseIterable, Identifiable {
     case newTab
+    case newInspectorTab
     case nextTab
     case previousTab
     case splitRight
     case splitDown
+    case zoomPane
     case focusPaneRight
     case focusPaneLeft
     case focusPaneUp
     case focusPaneDown
     case toggleAISidebar
     case newChat
+    case generateCommand
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .newTab: return "New Tab"
+        case .newInspectorTab: return "New Inspector Tab"
         case .nextTab: return "Next Tab"
         case .previousTab: return "Previous Tab"
         case .splitRight: return "New Horizontal Pane"
         case .splitDown: return "New Vertical Pane"
+        case .zoomPane: return "Zoom Pane"
         case .focusPaneRight: return "Navigate Pane Right"
         case .focusPaneLeft: return "Navigate Pane Left"
         case .focusPaneUp: return "Navigate Pane Up"
         case .focusPaneDown: return "Navigate Pane Down"
         case .toggleAISidebar: return "Toggle AI Panel"
         case .newChat: return "New Chat"
+        case .generateCommand: return "Generate Command"
         }
     }
 
@@ -60,9 +66,10 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
 
     var group: Group {
         switch self {
-        case .newTab, .nextTab, .previousTab: return .tabs
-        case .splitRight, .splitDown, .focusPaneRight, .focusPaneLeft, .focusPaneUp, .focusPaneDown: return .panes
-        case .toggleAISidebar, .newChat: return .assistant
+        case .newTab, .newInspectorTab, .nextTab, .previousTab: return .tabs
+        case .splitRight, .splitDown, .zoomPane,
+             .focusPaneRight, .focusPaneLeft, .focusPaneUp, .focusPaneDown: return .panes
+        case .toggleAISidebar, .newChat, .generateCommand: return .assistant
         }
     }
 
@@ -70,6 +77,8 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         switch self {
         case .newTab:
             return KeyShortcut(key: "t", command: true)
+        case .newInspectorTab:
+            return KeyShortcut(key: "t", command: true, shift: true)
         case .nextTab:
             return KeyShortcut(key: KeyShortcut.rightArrowToken, command: true, option: true)
         case .previousTab:
@@ -78,6 +87,8 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
             return KeyShortcut(key: "d", command: true)
         case .splitDown:
             return KeyShortcut(key: "d", command: true, shift: true)
+        case .zoomPane:
+            return KeyShortcut(key: KeyShortcut.returnToken, command: true, shift: true)
         case .focusPaneRight:
             return KeyShortcut(key: KeyShortcut.rightArrowToken, command: true, option: true, control: true)
         case .focusPaneLeft:
@@ -90,6 +101,8 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
             return KeyShortcut(key: "i", command: true)
         case .newChat:
             return KeyShortcut(key: "n", command: true)
+        case .generateCommand:
+            return KeyShortcut(key: KeyShortcut.returnToken, control: true)
         }
     }
 }
@@ -115,6 +128,7 @@ struct KeyShortcut: Codable, Equatable {
     static let downArrowToken = "↓"
     static let leftArrowToken = "←"
     static let rightArrowToken = "→"
+    static let returnToken = "↩"
 
     var hasModifier: Bool { command || option || control || shift }
 
@@ -133,6 +147,7 @@ struct KeyShortcut: Codable, Equatable {
         case Self.downArrowToken: return .downArrow
         case Self.leftArrowToken: return .leftArrow
         case Self.rightArrowToken: return .rightArrow
+        case Self.returnToken: return .return
         default: return KeyEquivalent(key.first ?? "?")
         }
     }
@@ -150,7 +165,7 @@ struct KeyShortcut: Codable, Equatable {
 
     private var keyGlyph: String {
         switch key {
-        case Self.upArrowToken, Self.downArrowToken, Self.leftArrowToken, Self.rightArrowToken:
+        case Self.upArrowToken, Self.downArrowToken, Self.leftArrowToken, Self.rightArrowToken, Self.returnToken:
             return key
         case " ":
             return "Space"
@@ -173,6 +188,7 @@ struct KeyShortcut: Codable, Equatable {
         case 124: key = Self.rightArrowToken
         case 125: key = Self.downArrowToken
         case 126: key = Self.upArrowToken
+        case 36, 76: key = Self.returnToken // Return and keypad Enter
         default:
             guard let characters = event.charactersIgnoringModifiers, let first = characters.first else {
                 return nil

@@ -236,7 +236,8 @@ final class AppModel {
             return
         }
         let subtree = draggedTab.tree
-        targetTab.tree = targetTab.tree.inserting(subtree, nextTo: target.leafId, edge: target.edge)
+        // A tab has no slot to "swap" with, so a center drop falls back to a trailing split.
+        targetTab.tree = targetTab.tree.inserting(subtree, nextTo: target.leafId, edge: target.edge ?? .trailing)
         targetTab.focusedLeafId = subtree.firstLeafId
         removeTabPreservingSessions(id: draggedTabId)
         activeTabId = targetTabId
@@ -249,12 +250,19 @@ final class AppModel {
         guard leafId != target.leafId,
               let tab = tabs.first(where: { $0.tree.leafIds.contains(leafId) }),
               tab.tree.leafIds.contains(target.leafId),
-              let kind = tab.tree.kind(of: leafId),
-              let pruned = tab.tree.removingLeaf(leafId) else {
+              let kind = tab.tree.kind(of: leafId) else {
             return
         }
-        let subtree = PaneNode.leaf(id: leafId, kind: kind)
-        tab.tree = pruned.inserting(subtree, nextTo: target.leafId, edge: target.edge)
+        if let edge = target.edge {
+            // Edge drop: relocate the pane into a new split beside the target.
+            guard let pruned = tab.tree.removingLeaf(leafId) else { return }
+            let subtree = PaneNode.leaf(id: leafId, kind: kind)
+            tab.tree = pruned.inserting(subtree, nextTo: target.leafId, edge: edge)
+        } else {
+            // Center drop: swap the two panes' positions in place.
+            guard let targetKind = tab.tree.kind(of: target.leafId) else { return }
+            tab.tree = tab.tree.swappingLeaves(leafId, kind, target.leafId, targetKind)
+        }
         tab.focusedLeafId = leafId
         bump()
     }
@@ -307,7 +315,7 @@ final class AppModel {
     /// maximizes it; pressing again restores the previous split layout.
     func toggleZoomFocused() {
         guard let tab = activeTab else { return }
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 1.0)) {
             if tab.zoomedLeafId == tab.focusedLeafId {
                 tab.zoomedLeafId = nil
             } else if tab.tree.leafIds.contains(tab.focusedLeafId) {
@@ -319,16 +327,29 @@ final class AppModel {
 
     func splitActive(axis: SplitAxis, kind: PaneKind = .terminal) {
         guard let tab = activeTab else { return }
+        _ = splitLeaf(tab.focusedLeafId, axis: axis, kind: kind)
+    }
+
+    /// Splits a specific pane (in whatever tab owns it), focuses the new pane, and returns its
+    /// leaf id. Used by both the UI (via `splitActive`) and the MCP server, which may target a
+    /// pane in a non-active tab.
+    @discardableResult
+    func splitLeaf(_ leafId: String, axis: SplitAxis, kind: PaneKind = .terminal) -> String? {
+        guard let tab = tabs.first(where: { $0.tree.leafIds.contains(leafId) }) else { return nil }
         // Splitting while zoomed would hide the new pane; restore the layout first.
         tab.zoomedLeafId = nil
-        let inheritedDirectory = kind == .terminal ? currentTerminalDirectory() : nil
+        let inheritedDirectory: String? = {
+            guard kind == .terminal, tab.tree.kind(of: leafId) == .terminal else { return nil }
+            return SessionRegistry.shared.existingTerminalSession(for: leafId)?.resolvedDirectory
+        }()
         let newLeafId = UUID().uuidString
-        tab.tree = tab.tree.splittingLeaf(tab.focusedLeafId, axis: axis, newKind: kind, newLeafId: newLeafId)
+        tab.tree = tab.tree.splittingLeaf(leafId, axis: axis, newKind: kind, newLeafId: newLeafId)
         tab.focusedLeafId = newLeafId
         if kind == .terminal, let inheritedDirectory {
             SessionRegistry.shared.terminalSession(for: newLeafId).startDirectory = inheritedDirectory
         }
         bump()
+        return newLeafId
     }
 
     /// The working directory of the focused terminal pane (used so new tabs/panes open

@@ -27,12 +27,7 @@ struct AppCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .newItem) {
             shortcutButton("New Tab", .newTab) { $0.newTab() }
-
-            Button("New Inspector Tab") {
-                model?.newTab(kind: .repl)
-            }
-            .keyboardShortcut("t", modifiers: [.command, .shift])
-            .disabled(model == nil)
+            shortcutButton("New Inspector Tab", .newInspectorTab) { $0.newTab(kind: .repl) }
         }
 
         CommandGroup(replacing: .saveItem) {
@@ -85,22 +80,13 @@ struct AppCommands: Commands {
         }
 
         CommandMenu("Terminal") {
-            Button("Generate Command…") {
-                model?.aiPromptVisible = true
-            }
-            .keyboardShortcut(.return, modifiers: .control)
-            .disabled(model == nil)
+            shortcutButton("Generate Command…", .generateCommand) { $0.aiPromptVisible = true }
 
             Divider()
 
             shortcutButton("New Horizontal Pane", .splitRight) { $0.splitActive(axis: .horizontal) }
             shortcutButton("New Vertical Pane", .splitDown) { $0.splitActive(axis: .vertical) }
-
-            Button("Zoom Pane") {
-                model?.toggleZoomFocused()
-            }
-            .keyboardShortcut(.return, modifiers: [.command, .shift])
-            .disabled(model == nil)
+            shortcutButton("Zoom Pane", .zoomPane) { $0.toggleZoomFocused() }
 
             Divider()
 
