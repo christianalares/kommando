@@ -214,6 +214,22 @@ final class TerminalSession: Identifiable {
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
         env["LANG"] = env["LANG"] ?? "en_US.UTF-8"
+        // Identify ourselves rather than leaking the launcher's TERM_PROGRAM (e.g. "iTerm.app"
+        // when started from another terminal), which would make tools probe for features we
+        // don't implement.
+        env["TERM_PROGRAM"] = "Kommando"
+        env.removeValue(forKey: "TERM_PROGRAM_VERSION")
+        // SwiftTerm renders the iTerm2 inline-image protocol, so advertise compatibility the
+        // conventional way. Image tools (viu/viuer, imgcat, …) key off LC_TERMINAL=iTerm2 to
+        // pick the full-resolution protocol instead of falling back to blocky half-blocks.
+        // LC_TERMINAL is also forwarded over SSH, so remote sessions keep working.
+        env["LC_TERMINAL"] = "iTerm2"
+        // Kommando is a full-color terminal, so drop any color-suppressing vars that leaked in
+        // from however the app was launched (a CI/agent shell may export NO_COLOR=1,
+        // FORCE_COLOR=0, TERM=dumb). The user's own shell rc can still set these if they
+        // genuinely want no color.
+        env.removeValue(forKey: "NO_COLOR")
+        env.removeValue(forKey: "FORCE_COLOR")
         // Advertise the theme's lightness so apps that read COLORFGBG (instead of querying
         // OSC 11) pick the right light/dark variant. Format is "foreground;background" as
         // ANSI indices; a dark background reads as 0, a light one as 15.
