@@ -20,6 +20,8 @@ struct SettingsView: View {
                 .tabItem { Label("Commands", systemImage: "command") }
             AISettingsView()
                 .tabItem { Label("AI", systemImage: "sparkles") }
+            MCPSettingsView()
+                .tabItem { Label("MCP", systemImage: "network") }
             UpdatesSettingsView()
                 .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
         }

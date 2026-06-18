@@ -46,6 +46,7 @@ final class SettingsStore {
         static let aiProvider = "aiProvider"
         static let shortcuts = "shortcutOverrides"
         static let userCommands = "userCommands"
+        static let mcpServerEnabled = "mcpServerEnabled"
     }
 
     /// Incremented on every change; observed to re-apply themes to live sessions.
@@ -67,6 +68,9 @@ final class SettingsStore {
     /// translucent vibrancy material, so theme backgrounds can be matched pixel-exactly.
     var reduceTransparency: Bool { didSet { persist(); bump() } }
     var aiProvider: AIProvider { didSet { persist(); bump() } }
+    /// When on, Kommando exposes a local MCP control socket so external AI tools can read
+    /// and drive its terminals. Off by default. The socket lifecycle is owned by `MCPService`.
+    var mcpServerEnabled: Bool { didSet { persist(); bump() } }
 
     private let defaults = UserDefaults.standard
 
@@ -89,6 +93,7 @@ final class SettingsStore {
         colorSchemeId = defaults.string(forKey: Key.colorScheme) ?? "system"
         reduceTransparency = defaults.object(forKey: Key.reduceTransparency) as? Bool ?? false
         aiProvider = AIProvider(rawValue: defaults.string(forKey: Key.aiProvider) ?? "") ?? .anthropic
+        mcpServerEnabled = defaults.bool(forKey: Key.mcpServerEnabled)
 
         if let data = defaults.data(forKey: Key.shortcuts),
            let decoded = try? JSONDecoder().decode([String: KeyShortcut].self, from: data) {
@@ -194,6 +199,7 @@ final class SettingsStore {
         defaults.set(colorSchemeId, forKey: Key.colorScheme)
         defaults.set(reduceTransparency, forKey: Key.reduceTransparency)
         defaults.set(aiProvider.rawValue, forKey: Key.aiProvider)
+        defaults.set(mcpServerEnabled, forKey: Key.mcpServerEnabled)
     }
 
     private func bump() {

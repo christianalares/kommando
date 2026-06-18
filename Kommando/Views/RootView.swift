@@ -217,23 +217,38 @@ private struct WindowCloseHandler: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Coordinator {
-        private var token: NSObjectProtocol?
+        private var tokens: [NSObjectProtocol] = []
 
         func observe(_ window: NSWindow, model: AppModel) {
-            guard token == nil else { return }
-            token = NotificationCenter.default.addObserver(
+            guard tokens.isEmpty else { return }
+
+            // Make the model reachable by the MCP control server, and keep "current"
+            // pointed at whichever window is key.
+            AppModelRegistry.shared.register(model: model, window: window)
+            tokens.append(NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: window,
+                queue: .main
+            ) { _ in
+                MainActor.assumeIsolated {
+                    AppModelRegistry.shared.setCurrent(model)
+                }
+            })
+
+            tokens.append(NotificationCenter.default.addObserver(
                 forName: NSWindow.willCloseNotification,
                 object: window,
                 queue: .main
             ) { _ in
                 MainActor.assumeIsolated {
+                    AppModelRegistry.shared.unregister(model: model)
                     model.disposeAllSessions()
                 }
-            }
+            })
         }
 
         deinit {
-            if let token {
+            for token in tokens {
                 NotificationCenter.default.removeObserver(token)
             }
         }

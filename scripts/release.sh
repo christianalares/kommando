@@ -83,6 +83,21 @@ xcodebuild \
     -quiet \
     archive
 
+# ---- 1b. Bundle the MCP helper into the archive -----------------------------
+# Built separately (it depends on the MCP Swift SDK) and dropped into the archived
+# app so the export step signs it inside-out with the same Developer ID + hardened
+# runtime as the rest of the bundle.
+echo "==> Building + bundling kommando-mcp helper"
+(cd "$REPO_ROOT/mcp-helper" && swift build -c release)
+HELPER_BIN="$REPO_ROOT/mcp-helper/.build/release/kommando-mcp"
+if [[ ! -x "$HELPER_BIN" ]]; then
+    echo "Helper build failed: $HELPER_BIN not found" >&2
+    exit 1
+fi
+ARCHIVE_APP="$ARCHIVE_PATH/Products/Applications/$APP_NAME.app"
+mkdir -p "$ARCHIVE_APP/Contents/Helpers"
+cp -f "$HELPER_BIN" "$ARCHIVE_APP/Contents/Helpers/kommando-mcp"
+
 # ---- 2. Export with Developer ID --------------------------------------------
 echo "==> Exporting (Developer ID)"
 EXPORT_PLIST="$BUILD_DIR/ExportOptions.plist"

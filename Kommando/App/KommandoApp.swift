@@ -17,6 +17,8 @@ struct KommandoApp: App {
         // Opt out of macOS automatic window tabbing so ⌘N always opens a real window,
         // regardless of the system "prefer tabs" setting.
         NSWindow.allowsAutomaticWindowTabbing = false
+        // Bring up the MCP control socket if the user has enabled it.
+        MCPService.shared.syncWithSettings()
     }
 
     var body: some Scene {
