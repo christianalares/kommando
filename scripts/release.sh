@@ -190,13 +190,19 @@ if ! gh release view "$DOWNLOADS_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
         --notes "Hosts release archives + delta updates for Sparkle. Do not delete."
 fi
 
+# Stable-named alias for the website's download button, so its link never changes
+# across releases. Kept OUTSIDE dist/ so generate_appcast doesn't treat it as a second
+# update entry; uploaded with --clobber to overwrite the previous release's copy.
+ALIAS_ZIP="$BUILD_DIR/$APP_NAME.zip"
+cp -f "$DIST_DIR/$ZIP_NAME" "$ALIAS_ZIP"
+
 echo "==> Uploading archives + deltas"
-# Upload every zip/delta so the appcast's enclosure URLs resolve.
+# Upload every zip/delta so the appcast's enclosure URLs resolve, plus the stable alias.
 shopt -s nullglob
 gh release upload "$DOWNLOADS_TAG" \
     --repo "$GH_REPO" \
     --clobber \
-    "$DIST_DIR"/*.zip "$DIST_DIR"/*.delta
+    "$DIST_DIR"/*.zip "$DIST_DIR"/*.delta "$ALIAS_ZIP"
 
 # ---- 7. Tagged pre-release for these notes ----------------------------------
 TAG="v${VERSION}-${CHANNEL}.${BUILD}"
