@@ -71,6 +71,9 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR" "$DIST_DIR"
 
 echo "==> Archiving"
+# Manual Developer ID signing: a directly-distributed (non-App Store) app is signed
+# with the "Developer ID Application" certificate and needs no provisioning profile, so
+# we avoid automatic signing's dependency on a separate Apple Development certificate.
 xcodebuild \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
@@ -79,7 +82,9 @@ xcodebuild \
     MARKETING_VERSION="$VERSION" \
     CURRENT_PROJECT_VERSION="$BUILD" \
     DEVELOPMENT_TEAM="$KOMMANDO_TEAM_ID" \
-    CODE_SIGN_STYLE=Automatic \
+    CODE_SIGN_STYLE=Manual \
+    CODE_SIGN_IDENTITY="Developer ID Application" \
+    PROVISIONING_PROFILE_SPECIFIER="" \
     -quiet \
     archive
 
@@ -111,7 +116,9 @@ cat > "$EXPORT_PLIST" <<PLIST
     <key>teamID</key>
     <string>${KOMMANDO_TEAM_ID}</string>
     <key>signingStyle</key>
-    <string>automatic</string>
+    <string>manual</string>
+    <key>signingCertificate</key>
+    <string>Developer ID Application</string>
 </dict>
 </plist>
 PLIST
@@ -126,6 +133,26 @@ if [[ ! -d "$TApp" ]]; then
     echo "Export failed: $TApp not found" >&2
     exit 1
 fi
+
+# ---- 2b. Harden + re-sign the bundled helper --------------------------------
+# exportArchive signs the app + Sparkle frameworks but leaves the loose executable in
+# Contents/Helpers with its plain SwiftPM signature (no hardened runtime), which
+# notarization rejects. Sign it inside-out: the helper first (with the hardened runtime
+# and a secure timestamp), then re-seal the outer app so its CodeResources pick up the
+# helper's new signature. Re-signing only the top level preserves Sparkle's nested
+# framework/XPC signatures (no --deep).
+echo "==> Hardening bundled kommando-mcp helper"
+codesign --force --options runtime --timestamp \
+    --sign "Developer ID Application" \
+    "$TApp/Contents/Helpers/kommando-mcp"
+
+echo "==> Re-sealing app bundle"
+codesign --force --options runtime --timestamp \
+    --sign "Developer ID Application" \
+    "$TApp"
+
+echo "==> Verifying signature"
+codesign --verify --deep --strict --verbose=2 "$TApp"
 
 # ---- 3. Notarize & staple ---------------------------------------------------
 echo "==> Notarizing (this can take a few minutes)"
