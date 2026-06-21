@@ -39,6 +39,9 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		351F39A72FDFBBBA00199467 /* Kommando */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				35E1F0010000000000000001 /* Exceptions for "Kommando" folder in "Kommando" target */,
+			);
 			path = Kommando;
 			sourceTree = "<group>";
 		};
@@ -53,6 +56,16 @@
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		35E1F0010000000000000001 /* Exceptions for "Kommando" folder in "Kommando" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 351F39A42FDFBBBA00199467 /* Kommando */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		351F39A22FDFBBBA00199467 /* Frameworks */ = {
@@ -417,9 +430,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Kommando/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/christianalares/kommando/main/appcast.xml";
-				INFOPLIST_KEY_SUPublicEDKey = "1VQ39WXpGAhYV1WYL1IP6xKFWZmYCTWt8pvDoDjcPPU=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -450,9 +462,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Kommando/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/christianalares/kommando/main/appcast.xml";
-				INFOPLIST_KEY_SUPublicEDKey = "1VQ39WXpGAhYV1WYL1IP6xKFWZmYCTWt8pvDoDjcPPU=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

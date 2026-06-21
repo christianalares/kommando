@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.developer-tools</string>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/christianalares/kommando/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>1VQ39WXpGAhYV1WYL1IP6xKFWZmYCTWt8pvDoDjcPPU=</string>
+</dict>
+</plist>
