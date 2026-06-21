@@ -3,6 +3,15 @@
     <channel>
         <title>Kommando</title>
         <item>
+            <title>0.1.1</title>
+            <pubDate>Sun, 21 Jun 2026 22:33:41 +0200</pubDate>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando-0.1.1.zip" length="7562824" type="application/octet-stream" sparkle:edSignature="quG+4uaLh1QEvkJgtd21c7I9lUQXZ4kaXqM2WpW/VF0L+zRbmfBSzfOGj1auq15a25lzlWPeinh9RapKtgM3AQ=="/>
+        </item>
+        <item>
             <title>0.1.0</title>
             <pubDate>Sun, 21 Jun 2026 21:53:58 +0200</pubDate>
             <sparkle:channel>beta</sparkle:channel>
