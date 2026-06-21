@@ -28,6 +28,9 @@ struct AppCommands: Commands {
         CommandGroup(after: .newItem) {
             shortcutButton("New Tab", .newTab) { $0.newTab() }
             shortcutButton("New Inspector Tab", .newInspectorTab) { $0.newTab(kind: .repl) }
+            shortcutButton("Show Spaces", .openSpaces) { $0.spacesPopoverToken += 1 }
+            Button("New Space") { model?.newSpace() }
+                .disabled(model == nil)
         }
 
         CommandGroup(replacing: .saveItem) {

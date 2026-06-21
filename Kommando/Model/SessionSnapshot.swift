@@ -18,11 +18,43 @@ struct TabSnapshot: Codable {
     var focusedLeafId: String
 }
 
-struct SessionSnapshot: Codable {
+struct SpaceSnapshot: Codable {
+    var id: String
+    var name: String
+    var colorHex: String
+    var defaultDirectory: String?
     var tabs: [TabSnapshot]
     var activeTabId: String
+}
+
+struct SessionSnapshot: Codable {
+    /// The current (post-Spaces) layout. Optional so pre-Spaces saved sessions decode.
+    var spaces: [SpaceSnapshot]?
+    var activeSpaceId: String?
+    /// Legacy pre-Spaces fields, kept optional purely for migration of old saved sessions.
+    var tabs: [TabSnapshot]?
+    var activeTabId: String?
     /// leaf id -> working directory, used to reopen terminals in the same folder.
     var directories: [String: String]
+
+    /// Resolves the spaces to restore, migrating a legacy single-list snapshot by wrapping
+    /// its tabs into one "Default" space so existing layouts survive the upgrade.
+    func resolvedSpaces() -> [SpaceSnapshot] {
+        if let spaces, !spaces.isEmpty {
+            return spaces
+        }
+        guard let tabs, !tabs.isEmpty else { return [] }
+        return [
+            SpaceSnapshot(
+                id: UUID().uuidString,
+                name: "Default",
+                colorHex: "#4F8DFD",
+                defaultDirectory: nil,
+                tabs: tabs,
+                activeTabId: activeTabId ?? (tabs.first?.id ?? "")
+            )
+        ]
+    }
 }
 
 enum SessionPersistence {

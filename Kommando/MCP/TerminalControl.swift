@@ -19,6 +19,7 @@ struct MCPSessionInfo: Encodable {
     let title: String
     let cwd: String?
     let busy: Bool
+    let space: String
     let tab: String
     let window: Int
     /// True for the focused pane of its window's active tab (the default target).
@@ -50,35 +51,41 @@ enum TerminalControl {
         let current = AppModelRegistry.shared.current()
         for (windowIndex, pair) in AppModelRegistry.shared.all.enumerated() {
             let model = pair.model
-            for tab in model.tabs {
-                for leafId in tab.tree.leafIds {
-                    let kind = tab.tree.kind(of: leafId)
-                    let isFocusedPane = tab.id == model.activeTabId
-                        && tab.focusedLeafId == leafId
-                        && model === current
-                    if kind == .repl {
-                        result.append(MCPSessionInfo(
-                            id: leafId,
-                            kind: "inspector",
-                            title: "Inspector",
-                            cwd: nil,
-                            busy: false,
-                            tab: tab.displayTitle,
-                            window: windowIndex + 1,
-                            focused: isFocusedPane
-                        ))
-                    } else {
-                        let session = SessionRegistry.shared.existingTerminalSession(for: leafId)
-                        result.append(MCPSessionInfo(
-                            id: leafId,
-                            kind: "terminal",
-                            title: session?.title ?? "Shell",
-                            cwd: session?.resolvedDirectory,
-                            busy: session.map { isBusy($0) } ?? false,
-                            tab: tab.displayTitle,
-                            window: windowIndex + 1,
-                            focused: isFocusedPane
-                        ))
+            for space in model.spaces {
+                let isActiveSpace = space.id == model.activeSpaceId
+                for tab in space.tabs {
+                    for leafId in tab.tree.leafIds {
+                        let kind = tab.tree.kind(of: leafId)
+                        let isFocusedPane = isActiveSpace
+                            && tab.id == space.activeTabId
+                            && tab.focusedLeafId == leafId
+                            && model === current
+                        if kind == .repl {
+                            result.append(MCPSessionInfo(
+                                id: leafId,
+                                kind: "inspector",
+                                title: "Inspector",
+                                cwd: nil,
+                                busy: false,
+                                space: space.name,
+                                tab: tab.displayTitle,
+                                window: windowIndex + 1,
+                                focused: isFocusedPane
+                            ))
+                        } else {
+                            let session = SessionRegistry.shared.existingTerminalSession(for: leafId)
+                            result.append(MCPSessionInfo(
+                                id: leafId,
+                                kind: "terminal",
+                                title: session?.title ?? "Shell",
+                                cwd: session?.resolvedDirectory,
+                                busy: session.map { isBusy($0) } ?? false,
+                                space: space.name,
+                                tab: tab.displayTitle,
+                                window: windowIndex + 1,
+                                focused: isFocusedPane
+                            ))
+                        }
                     }
                 }
             }
@@ -153,10 +160,11 @@ enum TerminalControl {
         let model: AppModel
         let leafId: String
         if let id, !id.isEmpty {
-            guard let (m, t) = owner(of: id) else { throw TerminalControlError.sessionNotFound }
+            guard let (m, s, t) = owner(of: id) else { throw TerminalControlError.sessionNotFound }
             model = m
             leafId = id
-            // Make the owning tab active so the new split is visible.
+            // Make the owning space + tab active so the new split is visible.
+            model.selectSpace(id: s.id)
             model.selectTab(id: t.id)
         } else {
             guard let m = AppModelRegistry.shared.current(), let t = m.activeTab else {
@@ -177,9 +185,10 @@ enum TerminalControl {
 
     @discardableResult
     static func focus(id: String) throws -> String {
-        guard let (model, tab) = owner(of: id) else {
+        guard let (model, space, tab) = owner(of: id) else {
             throw TerminalControlError.sessionNotFound
         }
+        model.selectSpace(id: space.id)
         model.selectTab(id: tab.id)
         model.focusLeaf(id)
         AppModelRegistry.shared.setCurrent(model)
@@ -192,7 +201,7 @@ enum TerminalControl {
 
     @discardableResult
     static func close(id: String) throws -> String {
-        guard let (model, _) = owner(of: id) else {
+        guard let (model, _, _) = owner(of: id) else {
             throw TerminalControlError.sessionNotFound
         }
         model.closeLeaf(id)
@@ -201,11 +210,14 @@ enum TerminalControl {
 
     // MARK: - Resolution
 
-    /// Finds the model + tab that contain a leaf id.
-    private static func owner(of leafId: String) -> (AppModel, Tab)? {
+    /// Finds the model + space + tab that contain a leaf id (across all spaces, not just the
+    /// active one).
+    private static func owner(of leafId: String) -> (AppModel, Space, Tab)? {
         for pair in AppModelRegistry.shared.all {
-            if let tab = pair.model.tabs.first(where: { $0.tree.leafIds.contains(leafId) }) {
-                return (pair.model, tab)
+            for space in pair.model.spaces {
+                if let tab = space.tabs.first(where: { $0.tree.leafIds.contains(leafId) }) {
+                    return (pair.model, space, tab)
+                }
             }
         }
         return nil
@@ -219,7 +231,7 @@ enum TerminalControl {
         let leafId: String
 
         if let id, !id.isEmpty {
-            guard let (m, t) = owner(of: id) else { throw TerminalControlError.sessionNotFound }
+            guard let (m, _, t) = owner(of: id) else { throw TerminalControlError.sessionNotFound }
             model = m
             tab = t
             leafId = id

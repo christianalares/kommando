@@ -16,6 +16,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     case newInspectorTab
     case nextTab
     case previousTab
+    case openSpaces
     case splitRight
     case splitDown
     case zoomPane
@@ -35,6 +36,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .newInspectorTab: return "New Inspector Tab"
         case .nextTab: return "Next Tab"
         case .previousTab: return "Previous Tab"
+        case .openSpaces: return "Show Spaces"
         case .splitRight: return "New Horizontal Pane"
         case .splitDown: return "New Vertical Pane"
         case .zoomPane: return "Zoom Pane"
@@ -59,6 +61,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
 
     /// Grouping used to lay the settings list out in sensible sections.
     enum Group: String, CaseIterable {
+        case spaces = "Spaces"
         case tabs = "Tabs"
         case panes = "Panes"
         case assistant = "Assistant"
@@ -66,6 +69,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
 
     var group: Group {
         switch self {
+        case .openSpaces: return .spaces
         case .newTab, .newInspectorTab, .nextTab, .previousTab: return .tabs
         case .splitRight, .splitDown, .zoomPane,
              .focusPaneRight, .focusPaneLeft, .focusPaneUp, .focusPaneDown: return .panes
@@ -83,6 +87,8 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
             return KeyShortcut(key: KeyShortcut.rightArrowToken, command: true, option: true)
         case .previousTab:
             return KeyShortcut(key: KeyShortcut.leftArrowToken, command: true, option: true)
+        case .openSpaces:
+            return KeyShortcut(key: "e", command: true)
         case .splitRight:
             return KeyShortcut(key: "d", command: true)
         case .splitDown:

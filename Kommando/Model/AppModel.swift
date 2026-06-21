@@ -68,9 +68,31 @@ enum DragItem: Equatable {
 @MainActor
 @Observable
 final class AppModel {
-    var tabs: [Tab] = []
-    var activeTabId: String = ""
+    /// All spaces in this window. Always non-empty after `bootstrap()`.
+    var spaces: [Space] = []
+    var activeSpaceId: String = ""
     var aiPromptVisible = false
+
+    /// Bumped to ask the title-bar chip to toggle the spaces switcher popover (⌘E / menu).
+    var spacesPopoverToken = 0
+
+    /// The currently shown space (the parent of the visible tabs).
+    var activeSpace: Space? {
+        spaces.first { $0.id == activeSpaceId }
+    }
+
+    /// The active space's tabs. Most of the app reads/mutates tabs through this proxy so the
+    /// Spaces layer is transparent to the tab bar, pane views, and existing tab operations.
+    var tabs: [Tab] {
+        get { activeSpace?.tabs ?? [] }
+        set { activeSpace?.tabs = newValue }
+    }
+
+    /// The active space's selected tab id (proxy, see `tabs`).
+    var activeTabId: String {
+        get { activeSpace?.activeTabId ?? "" }
+        set { activeSpace?.activeTabId = newValue }
+    }
 
     // MARK: - Drag state (cross-view: tab→pane and pane→pane/tab)
     /// What is currently being dragged (a whole tab detached into the pane area, or a pane).
@@ -125,31 +147,52 @@ final class AppModel {
     /// Populates this window: restores the saved session into the first window after launch,
     /// otherwise opens a single fresh tab.
     func bootstrap() {
-        guard tabs.isEmpty else { return }
+        guard spaces.isEmpty else { return }
         if !AppModel.didRestoreInitialWindow {
             AppModel.didRestoreInitialWindow = true
             if let json = SessionPersistence.load(), restore(fromJSON: json) {
                 return
             }
         }
+        let space = Space(
+            name: "Default",
+            colorHex: SpacePalette.colors.first ?? SpacePalette.defaultHex,
+            tabs: [],
+            activeTabId: ""
+        )
+        spaces = [space]
+        activeSpaceId = space.id
         newTab()
     }
 
-    /// A JSON snapshot of the current layout (tabs, panes, focus, terminal directories).
+    /// A JSON snapshot of the current layout (spaces, tabs, panes, focus, terminal directories).
     func snapshotJSON() -> String {
         var directories: [String: String] = [:]
-        for tab in tabs {
-            for leafId in tab.tree.leafIds where tab.tree.kind(of: leafId) == .terminal {
-                if let dir = SessionRegistry.shared.existingTerminalSession(for: leafId)?.resolvedDirectory {
-                    directories[leafId] = dir
+        for space in spaces {
+            for tab in space.tabs {
+                for leafId in tab.tree.leafIds where tab.tree.kind(of: leafId) == .terminal {
+                    if let dir = SessionRegistry.shared.existingTerminalSession(for: leafId)?.resolvedDirectory {
+                        directories[leafId] = dir
+                    }
                 }
             }
         }
         let snapshot = SessionSnapshot(
-            tabs: tabs.map {
-                TabSnapshot(id: $0.id, title: $0.title, customTitle: $0.customTitle, tree: $0.tree, focusedLeafId: $0.focusedLeafId)
+            spaces: spaces.map { space in
+                SpaceSnapshot(
+                    id: space.id,
+                    name: space.name,
+                    colorHex: space.colorHex,
+                    defaultDirectory: space.defaultDirectory,
+                    tabs: space.tabs.map {
+                        TabSnapshot(id: $0.id, title: $0.title, customTitle: $0.customTitle, tree: $0.tree, focusedLeafId: $0.focusedLeafId)
+                    },
+                    activeTabId: space.activeTabId
+                )
             },
-            activeTabId: activeTabId,
+            activeSpaceId: activeSpaceId,
+            tabs: nil,
+            activeTabId: nil,
             directories: directories
         )
         guard let data = try? JSONEncoder().encode(snapshot),
@@ -162,19 +205,20 @@ final class AppModel {
     @discardableResult
     private func restore(fromJSON json: String) -> Bool {
         guard let data = json.data(using: .utf8),
-              let snapshot = try? JSONDecoder().decode(SessionSnapshot.self, from: data),
-              !snapshot.tabs.isEmpty else {
+              let snapshot = try? JSONDecoder().decode(SessionSnapshot.self, from: data) else {
             return false
         }
+        let spaceSnapshots = snapshot.resolvedSpaces()
+        guard !spaceSnapshots.isEmpty else { return false }
         // Seed each terminal's start directory before its pane mounts so the shell reopens
         // in the right place.
         for (leafId, dir) in snapshot.directories {
             SessionRegistry.shared.terminalSession(for: leafId).startDirectory = dir
         }
-        tabs = snapshot.tabs.map { Tab(restoring: $0) }
-        activeTabId = tabs.contains(where: { $0.id == snapshot.activeTabId })
-            ? snapshot.activeTabId
-            : (tabs.first?.id ?? "")
+        spaces = spaceSnapshots.map { Space(restoring: $0) }
+        activeSpaceId = spaces.contains(where: { $0.id == snapshot.activeSpaceId })
+            ? (snapshot.activeSpaceId ?? "")
+            : (spaces.first?.id ?? "")
         return true
     }
 
@@ -182,10 +226,98 @@ final class AppModel {
         tabs.first { $0.id == activeTabId }
     }
 
+    // MARK: - Spaces
+
+    @discardableResult
+    func newSpace(name: String? = nil, directory: String? = nil) -> Space {
+        let resolvedName: String = {
+            let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? "Space \(spaces.count + 1)" : trimmed
+        }()
+        // The space's first tab opens in its folder if given, else inherits the current cwd.
+        let startDir = directory ?? currentTerminalDirectory()
+        let tab = Tab(kind: .terminal)
+        if let startDir {
+            SessionRegistry.shared.terminalSession(for: tab.tree.firstLeafId).startDirectory = startDir
+        }
+        let space = Space(
+            name: resolvedName,
+            colorHex: SpacePalette.next(after: spaces.map { $0.colorHex }),
+            defaultDirectory: directory,
+            tabs: [tab],
+            activeTabId: tab.id
+        )
+        spaces.append(space)
+        activeSpaceId = space.id
+        bump()
+        return space
+    }
+
+    func selectSpace(id: String) {
+        guard spaces.contains(where: { $0.id == id }) else { return }
+        activeSpaceId = id
+        bump()
+    }
+
+    func cycleSpace(_ delta: Int) {
+        guard let current = spaces.firstIndex(where: { $0.id == activeSpaceId }), !spaces.isEmpty else { return }
+        let count = spaces.count
+        let next = ((current + delta) % count + count) % count
+        activeSpaceId = spaces[next].id
+        bump()
+    }
+
+    func renameSpace(id: String, to newName: String) {
+        guard let space = spaces.first(where: { $0.id == id }) else { return }
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        space.name = trimmed
+        bump()
+    }
+
+    func setSpaceColor(id: String, hex: String) {
+        guard let space = spaces.first(where: { $0.id == id }) else { return }
+        space.colorHex = hex
+        bump()
+    }
+
+    func setSpaceDirectory(id: String, directory: String?) {
+        guard let space = spaces.first(where: { $0.id == id }) else { return }
+        space.defaultDirectory = directory
+        bump()
+    }
+
+    func moveSpace(fromOffsets: IndexSet, toOffset: Int) {
+        spaces.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        bump()
+    }
+
+    /// Deletes a space and disposes its sessions. Refuses to remove the last remaining space.
+    func removeSpace(id: String) {
+        guard spaces.count > 1, let space = spaces.first(where: { $0.id == id }) else { return }
+        for tab in space.tabs {
+            for leafId in tab.tree.leafIds {
+                SessionRegistry.shared.dispose(leafId)
+            }
+        }
+        removeSpaceFromList(space)
+        bump()
+    }
+
+    /// Removes a space from the array and moves the selection to a neighbor. Does NOT dispose
+    /// sessions (callers handle that when appropriate).
+    private func removeSpaceFromList(_ space: Space) {
+        guard let idx = spaces.firstIndex(where: { $0.id == space.id }) else { return }
+        spaces.remove(at: idx)
+        if activeSpaceId == space.id, !spaces.isEmpty {
+            activeSpaceId = spaces[max(0, idx - 1)].id
+        }
+    }
+
     // MARK: - Tabs
 
     func newTab(kind: PaneKind = .terminal) {
-        let inheritedDirectory = kind == .terminal ? currentTerminalDirectory() : nil
+        let inheritedDirectory = kind == .terminal ? (currentTerminalDirectory() ?? activeSpace?.defaultDirectory) : nil
         let tab = Tab(kind: kind)
         if kind == .terminal, let inheritedDirectory {
             SessionRegistry.shared.terminalSession(for: tab.tree.firstLeafId).startDirectory = inheritedDirectory
@@ -561,18 +693,30 @@ final class AppModel {
     }
 
     func closeTab(id: String) {
-        guard let idx = tabs.firstIndex(where: { $0.id == id }) else { return }
-        for leafId in tabs[idx].tree.leafIds {
+        guard let space = activeSpace else { return }
+        closeTab(id: id, in: space)
+    }
+
+    /// Closes a tab in a specific space. When the space empties, it's removed (switching to a
+    /// neighbor); closing the last tab of the last space closes the window.
+    private func closeTab(id: String, in space: Space) {
+        guard let idx = space.tabs.firstIndex(where: { $0.id == id }) else { return }
+        for leafId in space.tabs[idx].tree.leafIds {
             SessionRegistry.shared.dispose(leafId)
         }
-        tabs.remove(at: idx)
+        space.tabs.remove(at: idx)
 
-        if tabs.isEmpty {
-            NSApp.keyWindow?.performClose(nil)
+        if space.tabs.isEmpty {
+            if spaces.count <= 1 {
+                NSApp.keyWindow?.performClose(nil)
+                return
+            }
+            removeSpaceFromList(space)
+            bump()
             return
         }
-        if activeTabId == id {
-            activeTabId = tabs[max(0, idx - 1)].id
+        if space.activeTabId == id {
+            space.activeTabId = space.tabs[max(0, idx - 1)].id
         }
         bump()
     }
@@ -580,7 +724,11 @@ final class AppModel {
     /// Closes a specific pane (by leaf id), cascading to tab/window close if it was the
     /// last one. Used when a pane's shell exits on its own. No-op if the leaf is gone.
     func closeLeaf(_ leafId: String) {
-        guard let tab = tabs.first(where: { $0.tree.leafIds.contains(leafId) }) else { return }
+        // A pane's shell can exit while its space is in the background, so search all spaces.
+        guard let space = spaces.first(where: { $0.tabs.contains { $0.tree.leafIds.contains(leafId) } }),
+              let tab = space.tabs.first(where: { $0.tree.leafIds.contains(leafId) }) else {
+            return
+        }
         if let newTree = tab.tree.removingLeaf(leafId) {
             SessionRegistry.shared.dispose(leafId)
             tab.tree = newTree
@@ -589,18 +737,20 @@ final class AppModel {
             }
             bump()
         } else {
-            closeTab(id: tab.id)
+            closeTab(id: tab.id, in: space)
         }
     }
 
-    /// Tears down every session in this window's tabs. Called when the window closes so
+    /// Tears down every session in this window's spaces. Called when the window closes so
     /// shell processes/PTYs don't linger after a window is dismissed.
     func disposeAllSessions() {
-        for tab in tabs {
-            for leafId in tab.tree.leafIds {
-                SessionRegistry.shared.dispose(leafId)
+        for space in spaces {
+            for tab in space.tabs {
+                for leafId in tab.tree.leafIds {
+                    SessionRegistry.shared.dispose(leafId)
+                }
             }
         }
-        tabs.removeAll()
+        spaces.removeAll()
     }
 }

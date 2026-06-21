@@ -39,6 +39,8 @@ struct TabBarView: View {
         // always reachable. A flexible window-drag filler fills any empty strip space so
         // that area still moves the window (the window is otherwise non-movable).
         HStack(spacing: 6) {
+            SpaceChip(model: model)
+
             GeometryReader { geo in
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: false) {
