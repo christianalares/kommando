@@ -255,8 +255,10 @@ private struct CommandRow: View {
 
 private struct UpdatesSettingsView: View {
     @StateObject private var model = UpdaterSettingsViewModel(updater: AppUpdater.shared.updater)
+    @Environment(SettingsStore.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
         Form {
             Section {
                 Toggle("Automatically check for updates", isOn: $model.automaticallyChecksForUpdates)
@@ -266,8 +268,14 @@ private struct UpdatesSettingsView: View {
                 Button("Check for Updates…") {
                     AppUpdater.shared.checkForUpdates()
                 }
+            }
+
+            Section {
+                Toggle("Receive beta updates", isOn: $settings.betaUpdatesEnabled)
             } footer: {
-                Text("Kommando is on the beta channel and updates are signed and verified before installing.")
+                Text(settings.betaUpdatesEnabled
+                    ? "You're on the beta channel: you get early beta releases as well as stable ones. Updates are signed and verified before installing."
+                    : "You're on the stable channel: you only receive stable releases. Updates are signed and verified before installing.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -10,11 +10,17 @@ import Combine
 import SwiftUI
 import Sparkle
 
-/// Restricts the updater to the beta channel. Beta builds receive both beta-tagged
-/// releases and untagged (stable) releases; switch the returned set to change tracks.
+/// Controls which Sparkle channels the updater accepts. When beta updates are enabled the
+/// app receives both beta-tagged and untagged (stable) releases; when disabled it receives
+/// only untagged stable releases.
+///
+/// The flag is read straight from UserDefaults (not `SettingsStore`, which is main-actor
+/// isolated) because Sparkle calls this from a nonisolated context. The key must match
+/// `SettingsStore.Key.betaUpdatesEnabled`; it defaults to on while Kommando is pre-1.0.
 final class BetaUpdaterDelegate: NSObject, SPUUpdaterDelegate {
     func allowedChannels(for updater: SPUUpdater) -> Set<String> {
-        ["beta"]
+        let betaEnabled = UserDefaults.standard.object(forKey: "betaUpdatesEnabled") as? Bool ?? true
+        return betaEnabled ? ["beta"] : []
     }
 }
 

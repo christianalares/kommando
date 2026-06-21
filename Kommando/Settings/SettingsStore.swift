@@ -47,6 +47,8 @@ final class SettingsStore {
         static let shortcuts = "shortcutOverrides"
         static let userCommands = "userCommands"
         static let mcpServerEnabled = "mcpServerEnabled"
+        // NOTE: also read directly by BetaUpdaterDelegate in Updater.swift; keep in sync.
+        static let betaUpdatesEnabled = "betaUpdatesEnabled"
     }
 
     /// Incremented on every change; observed to re-apply themes to live sessions.
@@ -71,6 +73,10 @@ final class SettingsStore {
     /// When on, Kommando exposes a local MCP control socket so external AI tools can read
     /// and drive its terminals. Off by default. The socket lifecycle is owned by `MCPService`.
     var mcpServerEnabled: Bool { didSet { persist(); bump() } }
+    /// When on, the updater accepts beta-channel releases (in addition to stable). On by
+    /// default while Kommando is pre-1.0 and ships only on the beta channel. Read directly
+    /// from UserDefaults by `BetaUpdaterDelegate` (which isn't main-actor isolated).
+    var betaUpdatesEnabled: Bool { didSet { persist(); bump() } }
 
     private let defaults = UserDefaults.standard
 
@@ -94,6 +100,7 @@ final class SettingsStore {
         reduceTransparency = defaults.object(forKey: Key.reduceTransparency) as? Bool ?? false
         aiProvider = AIProvider(rawValue: defaults.string(forKey: Key.aiProvider) ?? "") ?? .anthropic
         mcpServerEnabled = defaults.bool(forKey: Key.mcpServerEnabled)
+        betaUpdatesEnabled = defaults.object(forKey: Key.betaUpdatesEnabled) as? Bool ?? true
 
         if let data = defaults.data(forKey: Key.shortcuts),
            let decoded = try? JSONDecoder().decode([String: KeyShortcut].self, from: data) {
@@ -200,6 +207,7 @@ final class SettingsStore {
         defaults.set(reduceTransparency, forKey: Key.reduceTransparency)
         defaults.set(aiProvider.rawValue, forKey: Key.aiProvider)
         defaults.set(mcpServerEnabled, forKey: Key.mcpServerEnabled)
+        defaults.set(betaUpdatesEnabled, forKey: Key.betaUpdatesEnabled)
     }
 
     private func bump() {
