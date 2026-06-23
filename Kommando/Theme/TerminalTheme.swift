@@ -77,19 +77,46 @@ enum TerminalThemes {
         ansi: tango
     )
 
-    /// Schemes the user can pick (plus the special "system" option handled separately).
+    /// Schemes the user can pick (plus the special "system" / "custom" options handled separately).
     static let selectable: [TerminalThemeDef] = [dark, light]
+
+    /// The standard palette re-installed whenever the user is *not* on a custom theme, so
+    /// turning custom colors off restores SwiftTerm's default ANSI colors mid-session. These
+    /// hex values match SwiftTerm's shipped macOS Terminal.app palette, so for non-custom
+    /// users this reproduces exactly what the terminal already showed.
+    static let defaultAnsiColors: [SwiftTerm.Color] = CustomPalette.default.ansiColors
 
     static func byId(_ id: String) -> TerminalThemeDef? {
         selectable.first { $0.id == id }
     }
 
+    /// Builds a theme definition from a user-editable palette.
+    static func custom(_ palette: CustomPalette) -> TerminalThemeDef {
+        TerminalThemeDef(
+            id: "custom",
+            name: "Custom",
+            isDark: palette.isDark,
+            background: .clear,
+            solidBackground: NSColor(hexString: palette.background) ?? dark.solidBackground,
+            foreground: NSColor(hexString: palette.foreground) ?? dark.foreground,
+            cursor: NSColor(hexString: palette.cursor) ?? dark.cursor,
+            ansi: palette.ansiColors
+        )
+    }
+
+    @MainActor
     static func resolved(schemeId: String) -> TerminalThemeDef {
         if schemeId == "system" {
-            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            return isDark ? dark : light
+            return systemIsDark ? dark : light
+        }
+        if let theme = SettingsStore.shared.customTheme(id: schemeId) {
+            return custom(theme.resolvedPalette(systemIsDark: systemIsDark))
         }
         return byId(schemeId) ?? dark
+    }
+
+    static var systemIsDark: Bool {
+        NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 }
 
@@ -100,10 +127,16 @@ enum TerminalTheming {
 
         view.font = resolveFont(name: settings.fontName, size: settings.fontSize)
 
-        // Intentionally NOT calling installColors(): forcing a 16-color palette overrides
-        // whatever colors the user's programs expect (e.g. zsh-autosuggestions' dark ANSI 8).
-        // Leaving SwiftTerm's standard xterm palette in place keeps those colors legible and
-        // matches what other terminals show.
+        // ANSI palette: only force the 16 colors when the user opts into a custom theme.
+        // For built-in themes we re-install SwiftTerm's default palette (a no-op visually,
+        // since it equals what the engine already had) so toggling *off* a custom theme
+        // restores standard ANSI colors mid-session without forcing a palette on users who
+        // rely on app-defined colors (e.g. zsh-autosuggestions' dim ANSI 8).
+        if settings.isCustomScheme {
+            view.installColors(theme.ansi)
+        } else {
+            view.installColors(TerminalThemes.defaultAnsiColors)
+        }
 
         // Set the *terminal's* fg/bg to truthful opaque colors first. These drive OSC 10/11
         // color queries, so apps (e.g. Claude Code) can detect light vs. dark — independent of

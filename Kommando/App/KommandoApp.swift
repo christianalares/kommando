@@ -41,5 +41,11 @@ struct KommandoApp: App {
             SettingsView()
                 .environment(settings)
         }
+
+        Window("Theme Studio", id: "theme-studio") {
+            ThemeStudioView()
+                .environment(settings)
+        }
+        .windowResizability(.contentMinSize)
     }
 }

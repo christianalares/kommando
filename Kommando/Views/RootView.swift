@@ -23,27 +23,29 @@ struct RootView: View {
     /// SwiftUI color scheme to force for the chrome. `nil` for "system" so the window
     /// tracks the OS appearance live (forcing a value here would lock it in place).
     private var preferredScheme: ColorScheme? {
-        switch settings.colorSchemeId {
-        case "dark": return .dark
-        case "light": return .light
-        default: return nil
+        // "system" and appearance-adaptive custom themes track the OS, so don't force a value.
+        if settings.colorSchemeId == "system" || settings.isAdaptiveScheme {
+            return nil
         }
+        return resolvedIsDark ? .dark : .light
     }
 
     /// Whether the active terminal theme is dark; drives the window tint so the chrome
     /// (tab bar, sidebar, dividers) matches the terminal.
     private var resolvedIsDark: Bool {
-        if settings.colorSchemeId == "system" {
+        if settings.colorSchemeId == "system" || settings.isAdaptiveScheme {
             return systemColorScheme == .dark
         }
         return TerminalThemes.resolved(schemeId: settings.colorSchemeId).isDark
     }
 
-    /// Frosted-background tint: dark blue for dark themes, near-white for light themes.
+    /// Frosted-background tint, matched to the active terminal theme's background so the
+    /// chrome (tab bar, sidebar, dividers) reads as one surface with the terminal — including
+    /// custom themes. For system/dark/light this equals the built-in backgrounds.
     private var backgroundTint: Color {
-        resolvedIsDark
-            ? Color(red: 40 / 255, green: 41 / 255, blue: 53 / 255)
-            : Color(red: 246 / 255, green: 247 / 255, blue: 250 / 255)
+        // Observe the OS appearance so "system" recomputes when the user flips light/dark.
+        _ = systemColorScheme
+        return Color(nsColor: TerminalThemes.resolved(schemeId: settings.colorSchemeId).solidBackground)
     }
 
     /// The window background: a solid theme color when the user opts out of transparency,

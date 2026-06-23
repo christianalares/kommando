@@ -42,6 +42,8 @@ final class SettingsStore {
         static let cursorStyle = "cursorStyle"
         static let cursorBlink = "cursorBlink"
         static let colorScheme = "colorScheme"
+        static let customPalette = "customPalette"
+        static let customThemes = "customThemes"
         static let reduceTransparency = "reduceTransparency"
         static let aiProvider = "aiProvider"
         static let shortcuts = "shortcutOverrides"
@@ -66,7 +68,11 @@ final class SettingsStore {
     var fontSize: Double { didSet { persist(); bump() } }
     var cursorStyle: TerminalCursorStyle { didSet { persist(); bump() } }
     var cursorBlink: Bool { didSet { persist(); bump() } }
+    /// `"system"`, `"dark"`, `"light"`, or the id of one of `customThemes`.
     var colorSchemeId: String { didSet { persist(); bump() } }
+    /// The user's named, editable color schemes, managed in the Theme Studio. Persisted as
+    /// JSON so they survive relaunches; applied when `colorSchemeId` is one of their ids.
+    var customThemes: [CustomTheme] { didSet { persistCustomThemes(); bump() } }
     /// When on, the terminal + window chrome paint a solid theme color instead of the
     /// translucent vibrancy material, so theme backgrounds can be matched pixel-exactly.
     var reduceTransparency: Bool { didSet { persist(); bump() } }
@@ -102,6 +108,16 @@ final class SettingsStore {
         cursorStyle = TerminalCursorStyle(rawValue: defaults.string(forKey: Key.cursorStyle) ?? "") ?? .block
         cursorBlink = defaults.object(forKey: Key.cursorBlink) as? Bool ?? true
         colorSchemeId = defaults.string(forKey: Key.colorScheme) ?? "system"
+        if let data = defaults.data(forKey: Key.customThemes),
+           let decoded = try? JSONDecoder().decode([CustomTheme].self, from: data) {
+            customThemes = decoded
+        } else if let data = defaults.data(forKey: Key.customPalette),
+                  let palette = try? JSONDecoder().decode(CustomPalette.self, from: data) {
+            // Migrate the previous single editable palette into the new themes list.
+            customThemes = [CustomTheme(name: "Custom", palette: palette)]
+        } else {
+            customThemes = []
+        }
         reduceTransparency = defaults.object(forKey: Key.reduceTransparency) as? Bool ?? false
         aiProvider = AIProvider(rawValue: defaults.string(forKey: Key.aiProvider) ?? "") ?? .anthropic
         mcpServerEnabled = defaults.bool(forKey: Key.mcpServerEnabled)
@@ -202,6 +218,97 @@ final class SettingsStore {
         if let data = try? JSONEncoder().encode(userCommands) {
             defaults.set(data, forKey: Key.userCommands)
         }
+    }
+
+    // MARK: - Custom themes
+
+    private func persistCustomThemes() {
+        if let data = try? JSONEncoder().encode(customThemes) {
+            defaults.set(data, forKey: Key.customThemes)
+        }
+    }
+
+    /// True when the active scheme is one of the user's custom themes (vs. system/dark/light).
+    var isCustomScheme: Bool {
+        customThemes.contains { $0.id == colorSchemeId }
+    }
+
+    /// True when the active custom theme follows the system light/dark appearance.
+    var isAdaptiveScheme: Bool {
+        customTheme(id: colorSchemeId)?.adaptsToAppearance ?? false
+    }
+
+    func customTheme(id: String) -> CustomTheme? {
+        customThemes.first { $0.id == id }
+    }
+
+    /// Adds a new theme seeded from the default palettes and returns its id.
+    @discardableResult
+    func addCustomTheme() -> String {
+        let theme = CustomTheme(name: uniqueThemeName("Custom"), palette: .default, lightPalette: .defaultLight)
+        customThemes.append(theme)
+        return theme.id
+    }
+
+    /// Toggles a theme's appearance adaptation. When enabling for the first time, seeds the
+    /// light variant (keeping the user's ANSI colors) so light mode doesn't show a dark palette.
+    func setThemeAdaptive(id: String, _ on: Bool) {
+        guard let index = customThemes.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        if on && customThemes[index].lightPalette == customThemes[index].palette {
+            var light = CustomPalette.defaultLight
+            light.ansi = customThemes[index].palette.ansi
+            customThemes[index].lightPalette = light
+        }
+        customThemes[index].adaptsToAppearance = on
+    }
+
+    /// Duplicates an existing theme (new id, "… Copy" name) and returns the new id.
+    @discardableResult
+    func duplicateCustomTheme(id: String) -> String? {
+        guard let source = customTheme(id: id) else {
+            return nil
+        }
+        let copy = CustomTheme(name: uniqueThemeName(source.name + " Copy"), palette: source.palette)
+        customThemes.append(copy)
+        return copy.id
+    }
+
+    func deleteCustomTheme(id: String) {
+        customThemes.removeAll { $0.id == id }
+        // If the deleted theme was active, fall back to the auto light/dark scheme.
+        if colorSchemeId == id {
+            colorSchemeId = "system"
+        }
+    }
+
+    func renameCustomTheme(id: String, to name: String) {
+        guard let index = customThemes.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        customThemes[index].name = trimmed.isEmpty ? customThemes[index].name : trimmed
+    }
+
+    func resetCustomTheme(id: String) {
+        guard let index = customThemes.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        customThemes[index].palette = .default
+        customThemes[index].lightPalette = .defaultLight
+    }
+
+    private func uniqueThemeName(_ base: String) -> String {
+        let existing = Set(customThemes.map(\.name))
+        if !existing.contains(base) {
+            return base
+        }
+        var n = 2
+        while existing.contains("\(base) \(n)") {
+            n += 1
+        }
+        return "\(base) \(n)"
     }
 
     private func persist() {

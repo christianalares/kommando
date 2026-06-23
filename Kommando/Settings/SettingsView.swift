@@ -32,6 +32,7 @@ struct SettingsView: View {
 
 private struct AppearanceSettingsView: View {
     @Environment(SettingsStore.self) private var settings
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var settings = settings
@@ -41,6 +42,22 @@ private struct AppearanceSettingsView: View {
                 ForEach(TerminalThemes.selectable) { theme in
                     Text(theme.name).tag(theme.id)
                 }
+                if !settings.customThemes.isEmpty {
+                    Divider()
+                    ForEach(settings.customThemes) { theme in
+                        Text(theme.name).tag(theme.id)
+                    }
+                }
+            }
+
+            Section {
+                Button("Customize Colors…") {
+                    openWindow(id: "theme-studio")
+                }
+            } footer: {
+                Text("Open the Theme Studio to create custom themes — edit the 16 ANSI colors plus background, foreground and cursor, with a live preview.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
