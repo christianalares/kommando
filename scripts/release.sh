@@ -147,7 +147,11 @@ codesign --force --options runtime --timestamp \
     "$TApp/Contents/Helpers/kommando-mcp"
 
 echo "==> Re-sealing app bundle"
+# --preserve-metadata=entitlements keeps the entitlements the export embedded
+# (microphone/camera device access, etc.); without it, this --force re-sign would
+# strip them and macOS would silently deny mic/camera to child processes again.
 codesign --force --options runtime --timestamp \
+    --preserve-metadata=entitlements \
     --sign "Developer ID Application" \
     "$TApp"
 

@@ -8,5 +8,9 @@
 	<string>https://raw.githubusercontent.com/christianalares/kommando/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>1VQ39WXpGAhYV1WYL1IP6xKFWZmYCTWt8pvDoDjcPPU=</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Kommando needs microphone access so command-line tools you run can record audio.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Kommando needs camera access so command-line tools you run can capture video.</string>
 </dict>
 </plist>
