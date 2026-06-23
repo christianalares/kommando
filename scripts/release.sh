@@ -2,13 +2,19 @@
 #
 # Cuts a signed, notarized, auto-updatable Kommando release.
 #
-#   ./scripts/release.sh <marketing-version> <build-number>
-#   ./scripts/release.sh 1.0.0 1
+#   ./scripts/release.sh <marketing-version> <build-number> [channel]
+#   ./scripts/release.sh 0.1.3 7            # beta (default)
+#   ./scripts/release.sh 1.0.0 12 stable    # stable / GM
+#
+# Channel:
+#   beta   (default) — tagged as the "beta" channel; beta-opted testers receive it.
+#   stable           — untagged; ALL users (beta and stable) receive it. Use for GM and
+#                      later stable patches. Beta is the right choice while pre-1.0.
 #
 # What it does:
 #   1. Archives + exports a Developer ID-signed Kommando.app
 #   2. Notarizes it with Apple and staples the ticket
-#   3. Zips it into dist/ and (re)generates appcast.xml on the beta channel
+#   3. Zips it into dist/ and (re)generates appcast.xml for the chosen channel
 #   4. Uploads the zip + deltas to the GitHub "downloads" release
 #   5. Creates a tagged, pre-release GitHub release for these notes
 #   6. Commits + pushes the updated appcast.xml
@@ -35,7 +41,6 @@ PROJECT="Kommando.xcodeproj"
 GH_REPO="christianalares/kommando"
 DOWNLOADS_TAG="downloads"
 DOWNLOAD_URL_PREFIX="https://github.com/${GH_REPO}/releases/download/${DOWNLOADS_TAG}/"
-CHANNEL="beta"
 
 BUILD_DIR="$REPO_ROOT/build"
 DIST_DIR="$REPO_ROOT/dist"
@@ -46,10 +51,17 @@ GENERATE_APPCAST="$REPO_ROOT/vendor/sparkle/bin/generate_appcast"
 # ---- Args & preflight -------------------------------------------------------
 VERSION="${1:-}"
 BUILD="${2:-}"
+CHANNEL="${3:-beta}"
 
 if [[ -z "$VERSION" || -z "$BUILD" ]]; then
-    echo "Usage: ./scripts/release.sh <marketing-version> <build-number>" >&2
-    echo "Example: ./scripts/release.sh 1.0.0 1" >&2
+    echo "Usage: ./scripts/release.sh <marketing-version> <build-number> [channel]" >&2
+    echo "Example: ./scripts/release.sh 0.1.3 7         (beta, default)" >&2
+    echo "         ./scripts/release.sh 1.0.0 12 stable (stable / GM)" >&2
+    exit 1
+fi
+
+if [[ "$CHANNEL" != "beta" && "$CHANNEL" != "stable" ]]; then
+    echo "Channel must be 'beta' or 'stable' (got '$CHANNEL')." >&2
     exit 1
 fi
 
@@ -63,6 +75,27 @@ fi
 
 ZIP_NAME="${APP_NAME}-${VERSION}.zip"
 TApp="$EXPORT_DIR/$APP_NAME.app"
+
+# ---- Release notes ----------------------------------------------------------
+# generate_appcast uses a .md/.html/.txt file whose basename matches the archive
+# (e.g. Kommando-0.1.3.md next to Kommando-0.1.3.zip) as that version's release notes,
+# and --embed-release-notes bakes them into appcast.xml's <description> so they show up
+# in Sparkle's "What's New" sheet. The same file is reused for the GitHub release body.
+NOTES_FILE=""
+for _ext in md html txt; do
+    _cand="$DIST_DIR/${APP_NAME}-${VERSION}.${_ext}"
+    if [[ -f "$_cand" ]]; then
+        NOTES_FILE="$_cand"
+        break
+    fi
+done
+
+if [[ -n "$NOTES_FILE" ]]; then
+    echo "==> Using release notes from $(basename "$NOTES_FILE")"
+else
+    echo "⚠️  No release notes file found at $DIST_DIR/${APP_NAME}-${VERSION}.{md,html,txt}."
+    echo "    Shipping without 'What's New' notes. (The kommando-release skill writes this file.)"
+fi
 
 echo "==> Releasing $APP_NAME $VERSION (build $BUILD) on the '$CHANNEL' channel"
 
@@ -178,11 +211,25 @@ rm -f "$DIST_DIR/$ZIP_NAME"
 ditto -c -k --keepParent "$TApp" "$DIST_DIR/$ZIP_NAME"
 
 # ---- 5. Generate appcast ----------------------------------------------------
+# Stable releases are written UNTAGGED so every user (beta and stable) is offered them;
+# beta releases get the "beta" channel tag so only beta-opted testers see them. Existing
+# entries keep their own channel because generate_appcast preserves them from the current
+# appcast.xml, so mixing a stable release into a beta history works.
 echo "==> Generating appcast (channel: $CHANNEL)"
-"$GENERATE_APPCAST" "$DIST_DIR" \
-    --channel "$CHANNEL" \
-    --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
-    -o "$REPO_ROOT/appcast.xml"
+# --embed-release-notes bakes the matching notes file into <description> so testers see
+# "What's New" in-app without us hosting a separate notes URL. Harmless when no file exists.
+if [[ "$CHANNEL" == "stable" ]]; then
+    "$GENERATE_APPCAST" "$DIST_DIR" \
+        --embed-release-notes \
+        --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
+        -o "$REPO_ROOT/appcast.xml"
+else
+    "$GENERATE_APPCAST" "$DIST_DIR" \
+        --embed-release-notes \
+        --channel "$CHANNEL" \
+        --download-url-prefix "$DOWNLOAD_URL_PREFIX" \
+        -o "$REPO_ROOT/appcast.xml"
+fi
 
 # ---- 6. Upload binaries to the rolling "downloads" release ------------------
 echo "==> Ensuring '$DOWNLOADS_TAG' release exists"
@@ -208,19 +255,44 @@ gh release upload "$DOWNLOADS_TAG" \
     --clobber \
     "$DIST_DIR"/*.zip "$DIST_DIR"/*.delta "$ALIAS_ZIP"
 
-# ---- 7. Tagged pre-release for these notes ----------------------------------
-TAG="v${VERSION}-${CHANNEL}.${BUILD}"
-echo "==> Creating pre-release $TAG"
+# ---- 7. Tagged GitHub release for these notes -------------------------------
+if [[ "$CHANNEL" == "stable" ]]; then
+    TAG="v${VERSION}"
+    RELEASE_TITLE="$APP_NAME $VERSION"
+    BLURB="Stable release. All users update automatically via Sparkle."
+    PRERELEASE_FLAG=""
+else
+    TAG="v${VERSION}-${CHANNEL}.${BUILD}"
+    RELEASE_TITLE="$APP_NAME $VERSION (beta $BUILD)"
+    BLURB="Beta release. Existing testers update automatically via Sparkle."
+    PRERELEASE_FLAG="--prerelease"
+fi
+
+# Build the GitHub release body: the same human notes shown in Sparkle (if any), plus a
+# blurb and a stable download link.
+GH_NOTES_FILE="$BUILD_DIR/gh-release-notes.md"
+{
+    if [[ -n "$NOTES_FILE" ]]; then
+        cat "$NOTES_FILE"
+        echo ""
+        echo "---"
+        echo ""
+    fi
+    echo "$BLURB"
+    echo ""
+    echo "Download: ${DOWNLOAD_URL_PREFIX}${ZIP_NAME}"
+} > "$GH_NOTES_FILE"
+
+echo "==> Creating release $TAG"
 if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
     echo "    Release $TAG already exists, skipping creation."
 else
+    # shellcheck disable=SC2086
     gh release create "$TAG" \
         --repo "$GH_REPO" \
-        --prerelease \
-        --title "$APP_NAME $VERSION (beta $BUILD)" \
-        --notes "Beta release. Existing testers update automatically via Sparkle.
-
-Download: ${DOWNLOAD_URL_PREFIX}${ZIP_NAME}"
+        $PRERELEASE_FLAG \
+        --title "$RELEASE_TITLE" \
+        --notes-file "$GH_NOTES_FILE"
 fi
 
 # ---- 8. Publish the appcast -------------------------------------------------
@@ -229,10 +301,14 @@ git add appcast.xml
 if git diff --cached --quiet; then
     echo "    appcast.xml unchanged."
 else
-    git commit -m "Release $APP_NAME $VERSION (beta $BUILD)"
+    git commit -m "Release $APP_NAME $VERSION ($CHANNEL $BUILD)"
     git push origin HEAD
 fi
 
 echo ""
-echo "✅ Released $APP_NAME $VERSION (build $BUILD)."
-echo "   Testers on the beta channel will be offered the update on next check."
+echo "✅ Released $APP_NAME $VERSION (build $BUILD) on the '$CHANNEL' channel."
+if [[ "$CHANNEL" == "stable" ]]; then
+    echo "   All users will be offered the update on next check."
+else
+    echo "   Testers on the beta channel will be offered the update on next check."
+fi
