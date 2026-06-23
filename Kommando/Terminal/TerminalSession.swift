@@ -60,10 +60,12 @@ final class TerminalSession: Identifiable {
             self?.resolvedDirectory
         }
         TerminalTheming.apply(SettingsStore.shared, to: terminalView)
+        terminalView.commandBlocksEnabled = SettingsStore.shared.commandBlocksEnabled
     }
 
     func applyTheme() {
         TerminalTheming.apply(SettingsStore.shared, to: terminalView)
+        terminalView.commandBlocksEnabled = SettingsStore.shared.commandBlocksEnabled
     }
 
     // MARK: - Find
@@ -131,7 +133,7 @@ final class TerminalSession: Identifiable {
         terminalView.startProcess(
             executable: shell,
             args: ["-l"],
-            environment: Self.makeEnvironment(),
+            environment: Self.makeEnvironment(shell: shell),
             execName: nil,
             currentDirectory: directory
         )
@@ -209,7 +211,7 @@ final class TerminalSession: Identifiable {
         isTerminated = true
     }
 
-    private static func makeEnvironment() -> [String] {
+    private static func makeEnvironment(shell: String) -> [String] {
         var env = ProcessInfo.processInfo.environment
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
@@ -238,6 +240,19 @@ final class TerminalSession: Identifiable {
         // Blank zsh's partial-line indicator (inverted "%"), same trick as the Glaze build.
         env["PROMPT_EOL_MARK"] = ""
         env.removeValue(forKey: "ELECTRON_RUN_AS_NODE")
+
+        // Command Blocks: auto-inject OSC 133 marks for zsh by redirecting ZDOTDIR to a
+        // Kommando-owned bootstrap that sources the user's real config first. Only affects
+        // shells we launch; disabling the feature reverts to a plain shell.
+        if SettingsStore.shared.commandBlocksEnabled,
+           shell.hasSuffix("zsh"),
+           let zdotDir = ShellIntegration.zdotDir() {
+            let userZDotDir = env["ZDOTDIR"]
+                ?? FileManager.default.homeDirectoryForCurrentUser.path
+            env[ShellIntegration.userZDotDirKey] = userZDotDir
+            env["ZDOTDIR"] = zdotDir
+        }
+
         return env.map { "\($0.key)=\($0.value)" }
     }
 }

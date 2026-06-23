@@ -80,6 +80,12 @@ private struct TerminalSettingsView: View {
             }
 
             Toggle("Blink cursor", isOn: $settings.cursorBlink)
+
+            Section {
+                Toggle("Highlight command blocks", isOn: $settings.commandBlocksEnabled)
+            } footer: {
+                Text("Click a past command to highlight it, then press ⌘C to copy the command and its output. Kommando sets this up automatically for zsh in new sessions.")
+            }
         }
         .formStyle(.grouped)
     }

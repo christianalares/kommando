@@ -34,9 +34,13 @@ struct TerminalPaneView: NSViewRepresentable {
         terminal.removeFromSuperview()
         terminal.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(terminal)
+        // Inset the terminal text horizontally for breathing room, while the container
+        // itself stays flush to the pane edges — this lets the command-block highlight
+        // bleed past the text to the very edge (see updateBlockHighlight).
+        let inset = KommandoTerminalView.horizontalContentInset
         NSLayoutConstraint.activate([
-            terminal.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            terminal.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            terminal.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: inset),
+            terminal.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -inset),
             terminal.topAnchor.constraint(equalTo: container.topAnchor),
             terminal.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])

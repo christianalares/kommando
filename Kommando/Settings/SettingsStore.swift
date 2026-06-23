@@ -47,6 +47,7 @@ final class SettingsStore {
         static let shortcuts = "shortcutOverrides"
         static let userCommands = "userCommands"
         static let mcpServerEnabled = "mcpServerEnabled"
+        static let commandBlocksEnabled = "commandBlocksEnabled"
         // NOTE: also read directly by BetaUpdaterDelegate in Updater.swift; keep in sync.
         static let betaUpdatesEnabled = "betaUpdatesEnabled"
     }
@@ -73,6 +74,10 @@ final class SettingsStore {
     /// When on, Kommando exposes a local MCP control socket so external AI tools can read
     /// and drive its terminals. Off by default. The socket lifecycle is owned by `MCPService`.
     var mcpServerEnabled: Bool { didSet { persist(); bump() } }
+    /// When on, output between OSC 133 shell-integration marks is grouped into clickable
+    /// "command blocks": click a past command to highlight it, then ⌘C to copy the command
+    /// and its output. Only has a visible effect when the shell emits the marks.
+    var commandBlocksEnabled: Bool { didSet { persist(); bump() } }
     /// When on, the updater accepts beta-channel releases (in addition to stable). On by
     /// default while Kommando is pre-1.0 and ships only on the beta channel. Read directly
     /// from UserDefaults by `BetaUpdaterDelegate` (which isn't main-actor isolated).
@@ -100,6 +105,7 @@ final class SettingsStore {
         reduceTransparency = defaults.object(forKey: Key.reduceTransparency) as? Bool ?? false
         aiProvider = AIProvider(rawValue: defaults.string(forKey: Key.aiProvider) ?? "") ?? .anthropic
         mcpServerEnabled = defaults.bool(forKey: Key.mcpServerEnabled)
+        commandBlocksEnabled = defaults.object(forKey: Key.commandBlocksEnabled) as? Bool ?? true
         betaUpdatesEnabled = defaults.object(forKey: Key.betaUpdatesEnabled) as? Bool ?? true
 
         if let data = defaults.data(forKey: Key.shortcuts),
@@ -207,6 +213,7 @@ final class SettingsStore {
         defaults.set(reduceTransparency, forKey: Key.reduceTransparency)
         defaults.set(aiProvider.rawValue, forKey: Key.aiProvider)
         defaults.set(mcpServerEnabled, forKey: Key.mcpServerEnabled)
+        defaults.set(commandBlocksEnabled, forKey: Key.commandBlocksEnabled)
         defaults.set(betaUpdatesEnabled, forKey: Key.betaUpdatesEnabled)
     }
 

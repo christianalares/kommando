@@ -165,7 +165,7 @@ struct RootView: View {
                 PaneTreeView(tab: tab, model: model)
                     .id(tab.id)
                     .padding(.top, titleBarHeight + 1)
-                    .padding([.horizontal, .bottom], 8)
+                    .padding(.bottom, 8)
             }
 
             VStack(spacing: 0) {
