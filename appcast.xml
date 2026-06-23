@@ -3,6 +3,25 @@
     <channel>
         <title>Kommando</title>
         <item>
+            <title>0.2.0</title>
+            <pubDate>Tue, 23 Jun 2026 09:55:47 +0200</pubDate>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[### What's new
+- **Command blocks** — Kommando now marks each command you run. Click one to select it, use ⌥↑ / ⌥↓ to cycle between commands, ⌘C to copy the whole block, or right-click for a context menu (copy / paste / clear).
+
+### Fixes
+- Microphone and camera now work in terminal programs — child processes correctly inherit the permissions instead of being silently denied (#4).
+]]></description>
+            <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando-0.2.0.zip" length="7606615" type="application/octet-stream" sparkle:edSignature="Lo0PtFDyuxOA4MqB24Jrb4P+aiprYgAwegSLQ4pLDBEx9fE1OOQJUiZRGlbeCo9ulCYUrTBjR6ccDxCYvzEuCA=="/>
+            <sparkle:deltas>
+                <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando4-3.delta" sparkle:deltaFrom="3" length="337662" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="tia95814AfvLFWSSolzP79Eyd0AZEMban34IkBD+YqQzcTEBLjV+LdohwavC4meJ5Dk6wHxgl6/opofHrpcTAw=="/>
+                <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando4-2.delta" sparkle:deltaFrom="2" length="338470" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="S/5HKF1yk6N6PEuW6/TdCz1hksUQbhXkFMLRBOR94Z7+rSfWJipz+0GOs4yl0EzeyQNexZi32IRuF9RbkdA/Cw=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>0.1.2</title>
             <pubDate>Mon, 22 Jun 2026 12:13:50 +0200</pubDate>
             <sparkle:channel>beta</sparkle:channel>
@@ -22,15 +41,6 @@
             <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando-0.1.1.zip" length="7562824" type="application/octet-stream" sparkle:edSignature="quG+4uaLh1QEvkJgtd21c7I9lUQXZ4kaXqM2WpW/VF0L+zRbmfBSzfOGj1auq15a25lzlWPeinh9RapKtgM3AQ=="/>
-        </item>
-        <item>
-            <title>0.1.0</title>
-            <pubDate>Sun, 21 Jun 2026 21:53:58 +0200</pubDate>
-            <sparkle:channel>beta</sparkle:channel>
-            <sparkle:version>1</sparkle:version>
-            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando-0.1.0.zip" length="7559759" type="application/octet-stream"/>
         </item>
     </channel>
 </rss>
