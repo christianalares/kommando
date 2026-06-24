@@ -3,6 +3,26 @@
     <channel>
         <title>Kommando</title>
         <item>
+            <title>0.3.1</title>
+            <pubDate>Wed, 24 Jun 2026 14:51:27 +0200</pubDate>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>0.3.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[### What's new
+- One-click MCP setup for Raycast, joining Cursor, VS Code, Claude Desktop/Code, and Codex
+- AI tools now show their real brand logos in the MCP settings list
+- Clearer "Added" status: tools you've configured outside their detected app now show the badge, and Raycast remembers when you've added it from Kommando
+]]></description>
+            <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando-0.3.1.zip" length="7816825" type="application/octet-stream" sparkle:edSignature="dEPe+rsFA7bOJmF6H8ls29RZjFY66ivu8hP4aWrto4DYEh+wdqCX7eYU6MbtXO5e2xt5z8BUXL4vQ7YB82a5DQ=="/>
+            <sparkle:deltas>
+                <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando6-5.delta" sparkle:deltaFrom="5" length="416478" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="dsJnWJM4k9gt1vbSr7vcO/yfdDkdmSYw711osbwcqd3Sx6y3BPXUAA0gS2GCJxwxjDPr2kQF8uRFiU+NVAOKCw=="/>
+                <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando6-4.delta" sparkle:deltaFrom="4" length="584042" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="qhrwFauuoOoERqV/a7J3fv+qHsDTe0lXqYlW9CFyC5EaqGawqVRA62Kypn+c7AEZdgjwstviWyqCGxGddAF6CQ=="/>
+                <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando6-3.delta" sparkle:deltaFrom="3" length="652318" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="gAidKF0UaU/u8A1FEpLVH2eyUvRcRpfv3+1Ln/Idvqcs4XFFw0HD4npYCOLto172zHgyWNPba0RsGMiMd9olDw=="/>
+                <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando6-2.delta" sparkle:deltaFrom="2" length="652326" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="Uzm1c2ZZEhTFwJVSUHvGs0FXROSCL2h1Kaqj6imuMu2L9YNN4CZwo4eiSyn1tNP/Q3SVrlkdM02mfwZCERx8BA=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>0.3.0</title>
             <pubDate>Wed, 24 Jun 2026 00:02:56 +0200</pubDate>
             <sparkle:channel>beta</sparkle:channel>
@@ -38,18 +58,6 @@
             <sparkle:deltas>
                 <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando4-3.delta" sparkle:deltaFrom="3" length="337662" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="tia95814AfvLFWSSolzP79Eyd0AZEMban34IkBD+YqQzcTEBLjV+LdohwavC4meJ5Dk6wHxgl6/opofHrpcTAw=="/>
                 <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando4-2.delta" sparkle:deltaFrom="2" length="338470" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="S/5HKF1yk6N6PEuW6/TdCz1hksUQbhXkFMLRBOR94Z7+rSfWJipz+0GOs4yl0EzeyQNexZi32IRuF9RbkdA/Cw=="/>
-            </sparkle:deltas>
-        </item>
-        <item>
-            <title>0.1.2</title>
-            <pubDate>Mon, 22 Jun 2026 12:13:50 +0200</pubDate>
-            <sparkle:channel>beta</sparkle:channel>
-            <sparkle:version>3</sparkle:version>
-            <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando-0.1.2.zip" length="7562821" type="application/octet-stream" sparkle:edSignature="Uvk3ILEvFIveFsjigREonsqrGovMc+NFnsgs1x/GdO+XHn1ojwPjPWDIX6mKTSekRz6KSnVmXL47qMoUlvuIAw=="/>
-            <sparkle:deltas>
-                <enclosure url="https://github.com/christianalares/kommando/releases/download/downloads/Kommando3-2.delta" sparkle:deltaFrom="2" length="18130" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977840" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="rist/xzh4GiFdu7skJwcsh0b0lg8vgVTwgmzKajkvnh8+AxlSdIhB7M1CTX/ZP7fdOuZt+Piis1b2cid9B/OBg=="/>
             </sparkle:deltas>
         </item>
     </channel>
