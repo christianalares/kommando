@@ -49,15 +49,9 @@ open Kommando.xcodeproj
 
 Then build & run (`⌘R`) in Xcode. Dependencies (SwiftTerm) are resolved automatically via Swift Package Manager.
 
-## Installing a build (for testers)
+## Installing
 
-Kommando is currently **ad-hoc signed** (not notarized), so macOS Gatekeeper will warn on first launch. After moving `Kommando.app` to `/Applications`, clear the quarantine flag once:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Kommando.app
-```
-
-…or right-click the app → **Open** → **Open**.
+Download the latest `Kommando.zip` from [kommando.app](https://kommando.app), unzip it, and drag `Kommando.app` to `/Applications`. Builds are **Developer ID-signed and notarized**, so it opens normally with no Gatekeeper workaround — and it keeps itself up to date via Sparkle.
 
 ## Built with
 
