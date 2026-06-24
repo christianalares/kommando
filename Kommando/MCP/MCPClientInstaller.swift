@@ -37,6 +37,17 @@ struct MCPClient: Identifiable {
     let copyText: String
     /// Caption shown under the copy field describing where the snippet goes.
     let copyHint: String
+    /// Path to an .app bundle whose real icon should be shown instead of `symbol`.
+    var appIconPath: String? = nil
+    /// Overrides the default "Add"/"Re-add" primary button label when set.
+    var primaryLabel: String? = nil
+    /// Asset-catalog image name for the brand logo (from svgl); preferred over `symbol`.
+    var logoAsset: String? = nil
+    /// True when this client stores its MCP config somewhere we can't read (e.g. Raycast's
+    /// encrypted DB), so "Added" is inferred from a local record of the user completing our
+    /// install flow rather than a live config read. The check can go stale if they later
+    /// remove the server inside the client.
+    var locallyTracked: Bool = false
 }
 
 /// Which optional CLIs are reachable on the user's login PATH (probed once, off the main
@@ -76,6 +87,7 @@ enum MCPClientInstaller {
 
     private static func buildClients(helperPath: String, clis: MCPDetectedCLIs) -> [MCPClient] {
         let q = shellQuote(helperPath)
+        let locallyConfirmedClients = self.locallyConfirmedClients
         let home = FileManager.default.homeDirectoryForCurrentUser
         let codexConfig = home.appendingPathComponent(".codex/config.toml")
         let cursorConfig = home.appendingPathComponent(".cursor/mcp.json")
@@ -91,7 +103,8 @@ enum MCPClientInstaller {
             isConfigured: configHasServer(cursorConfig),
             primary: cursorDeeplink(helperPath: helperPath).map { .deeplink($0) } ?? .manual,
             copyText: clientConfigJSON(helperPath: helperPath),
-            copyHint: "Add to ~/.cursor/mcp.json"
+            copyHint: "Add to ~/.cursor/mcp.json",
+            logoAsset: "logo-cursor"
         )
 
         let vscode = MCPClient(
@@ -106,7 +119,8 @@ enum MCPClientInstaller {
                 display: "code --add-mcp '…'"
             ),
             copyText: "code --add-mcp '\(vscodeConfigJSON(helperPath: helperPath))'",
-            copyHint: "Run in a terminal where the `code` command is installed"
+            copyHint: "Run in a terminal where the `code` command is installed",
+            logoAsset: "logo-vscode"
         )
 
         let claudeDesktop = MCPClient(
@@ -118,7 +132,8 @@ enum MCPClientInstaller {
             isConfigured: configHasServer(claudeDesktopConfigURL),
             primary: .writeJSON(path: claudeDesktopConfigURL),
             copyText: clientConfigJSON(helperPath: helperPath),
-            copyHint: "Add to \(claudeDesktopConfigURL.path)"
+            copyHint: "Add to \(claudeDesktopConfigURL.path)",
+            logoAsset: "logo-claude"
         )
 
         let claudeCode = MCPClient(
@@ -133,7 +148,8 @@ enum MCPClientInstaller {
                 display: "claude mcp add -s user kommando -- …"
             ),
             copyText: "claude mcp add -s user \(serverName) -- \(q)",
-            copyHint: "Run in a terminal where the `claude` command is installed"
+            copyHint: "Run in a terminal where the `claude` command is installed",
+            logoAsset: "logo-claude"
         )
 
         let codex = MCPClient(
@@ -145,19 +161,67 @@ enum MCPClientInstaller {
             isConfigured: configHasServer(codexConfig),
             primary: .manual,
             copyText: codexConfigTOML(helperPath: helperPath),
-            copyHint: "Add to ~/.codex/config.toml"
+            copyHint: "Add to ~/.codex/config.toml",
+            logoAsset: "logo-codex"
         )
 
-        return [cursor, vscode, claudeDesktop, claudeCode, codex]
+        let raycastPath = appPath("Raycast")
+        let raycast = MCPClient(
+            id: "raycast",
+            name: "Raycast",
+            blurb: "Adds Kommando to Raycast (opens Raycast to confirm).",
+            symbol: "magnifyingglass",
+            isInstalled: raycastPath != nil,
+            isConfigured: locallyConfirmedClients.contains("raycast"),
+            primary: raycastDeeplink(helperPath: helperPath).map { .deeplink($0) } ?? .manual,
+            copyText: raycastConfigJSON(helperPath: helperPath),
+            copyHint: "Or paste into Raycast’s “Install MCP Server” form (Name: kommando)",
+            logoAsset: "logo-raycast",
+            locallyTracked: true
+        )
+
+        return [cursor, vscode, claudeDesktop, claudeCode, codex, raycast]
+    }
+
+    // MARK: - Local install record (for clients we can't read back, e.g. Raycast)
+
+    private static let locallyConfirmedKey = "mcp.locallyConfirmedClients"
+
+    /// Client ids the user has installed via Kommando's flow but whose config we can't read.
+    static var locallyConfirmedClients: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: locallyConfirmedKey) ?? [])
+    }
+
+    /// Records that the user completed our install flow for a client we can't detect directly.
+    static func markLocallyConfirmed(_ id: String) {
+        var ids = locallyConfirmedClients
+        ids.insert(id)
+        UserDefaults.standard.set(Array(ids), forKey: locallyConfirmedKey)
+    }
+
+    /// Clears a soft "Added" record (e.g. when the user removed the server inside the client).
+    static func clearLocalConfirmation(_ id: String) {
+        var ids = locallyConfirmedClients
+        ids.remove(id)
+        UserDefaults.standard.set(Array(ids), forKey: locallyConfirmedKey)
     }
 
     // MARK: - Detection helpers
 
     /// True when an app bundle of this name exists in a standard Applications folder.
     private static func appInstalled(_ name: String) -> Bool {
+        appPath(name) != nil
+    }
+
+    /// The path to an installed `.app` bundle of this name, if present in a standard
+    /// Applications folder.
+    private static func appPath(_ name: String) -> String? {
         let fm = FileManager.default
-        return fm.fileExists(atPath: "/Applications/\(name).app")
-            || fm.fileExists(atPath: NSHomeDirectory() + "/Applications/\(name).app")
+        let candidates = [
+            "/Applications/\(name).app",
+            NSHomeDirectory() + "/Applications/\(name).app",
+        ]
+        return candidates.first { fm.fileExists(atPath: $0) }
     }
 
     /// True when a command resolves on the login-shell PATH. Cheap synchronous check used for
@@ -223,6 +287,17 @@ enum MCPClientInstaller {
         """
     }
 
+    /// The single-server object Raycast's "Install MCP Server" form accepts.
+    static func raycastConfigJSON(helperPath: String) -> String {
+        """
+        {
+          "name": "\(serverName)",
+          "type": "stdio",
+          "command": "\(jsonEscape(helperPath))"
+        }
+        """
+    }
+
     // MARK: - Deeplinks
 
     static func cursorDeeplink(helperPath: String) -> URL? {
@@ -238,6 +313,24 @@ enum MCPClientInstaller {
         components.path = "/mcp/install"
         components.percentEncodedQuery = "name=\(serverName)&config=\(encoded)"
         return components.url
+    }
+
+    /// Raycast's (undocumented) install deeplink: `raycast://mcp/install?<url-encoded JSON>`,
+    /// where the JSON is a single server object `{name,type,command,…}`. Opening it pops
+    /// Raycast's Install MCP Server form pre-filled, ready to confirm.
+    static func raycastDeeplink(helperPath: String) -> URL? {
+        let config: [String: Any] = [
+            "name": serverName,
+            "type": "stdio",
+            "command": helperPath,
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: config),
+              let json = String(data: data, encoding: .utf8),
+              // Encode everything non-alphanumeric so the JSON survives intact as the query.
+              let encoded = json.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else {
+            return nil
+        }
+        return URL(string: "raycast://mcp/install?\(encoded)")
     }
 
     // MARK: - Actions

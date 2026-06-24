@@ -108,6 +108,32 @@ struct MCPSettingsView: View {
     }
 }
 
+// MARK: - Client icon
+
+/// Shows the client's real app icon when we know its bundle path, falling back to an SF Symbol.
+private struct ClientIcon: View {
+    let client: MCPClient
+    let size: CGFloat
+
+    var body: some View {
+        if let asset = client.logoAsset {
+            Image(asset)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+        } else if let path = client.appIconPath {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: path))
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: client.symbol)
+                .font(.system(size: size))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 // MARK: - Installed client row
 
 private struct ClientRow: View {
@@ -122,10 +148,8 @@ private struct ClientRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
-                Image(systemName: client.symbol)
-                    .font(.system(size: 15))
+                ClientIcon(client: client, size: 18)
                     .frame(width: 22)
-                    .foregroundStyle(.secondary)
 
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 6) {
@@ -135,6 +159,9 @@ private struct ClientRow: View {
                                 .labelStyle(.titleAndIcon)
                                 .font(.caption2)
                                 .foregroundStyle(.green)
+                                .help(client.locallyTracked
+                                    ? "Based on a local record of adding it from Kommando. Right-click to clear if you removed it in \(client.name)."
+                                    : "")
                         }
                     }
                     Text(client.blurb)
@@ -156,6 +183,14 @@ private struct ClientRow: View {
             }
         }
         .padding(.vertical, 2)
+        .contextMenu {
+            if client.locallyTracked && client.isConfigured {
+                Button("Clear “Added” for \(client.name)") {
+                    MCPClientInstaller.clearLocalConfirmation(client.id)
+                    onChanged()
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -176,7 +211,7 @@ private struct ClientRow: View {
             if working {
                 ProgressView().controlSize(.small)
             } else {
-                Text(client.isConfigured ? "Re-add" : "Add")
+                Text(client.primaryLabel ?? (client.isConfigured ? "Re-add" : "Add"))
             }
         }
         // Already configured → quieter bordered style; first-time add → prominent.
@@ -218,6 +253,9 @@ private struct ClientRow: View {
                 case let .success(message):
                     failed = false
                     status = message
+                    if client.locallyTracked {
+                        MCPClientInstaller.markLocallyConfirmed(client.id)
+                    }
                     onChanged()
                 case let .failure(error):
                     failed = true
@@ -243,11 +281,18 @@ private struct OtherToolsSection: View {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(clients) { client in
                         HStack(spacing: 10) {
-                            Image(systemName: client.symbol)
+                            ClientIcon(client: client, size: 16)
                                 .frame(width: 20)
-                                .foregroundStyle(.tertiary)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(client.name).font(.callout)
+                                HStack(spacing: 6) {
+                                    Text(client.name).font(.callout)
+                                    if client.isConfigured {
+                                        Label("Added", systemImage: "checkmark.circle.fill")
+                                            .labelStyle(.titleAndIcon)
+                                            .font(.caption2)
+                                            .foregroundStyle(.green)
+                                    }
+                                }
                                 Text(client.copyHint)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
