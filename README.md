@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/icon.png" alt="Kommando" width="120" height="120" />
   <h1>Kommando</h1>
-  <p><strong>A fast, native macOS terminal — split panes, tabs, and an AI sidebar, built in SwiftUI.</strong></p>
+  <p><strong>A native macOS terminal — split panes, tabs, and an AI sidebar, built in SwiftUI.</strong></p>
   <p>
     <a href="https://kommando.app"><strong>🌐 kommando.app</strong></a>
   </p>
@@ -28,6 +28,10 @@
 - **Font zoom** — `⌘+` / `⌘-` / `⌘0`.
 - **Theming** — Dark / Light / System, with a translucent native window and Nerd Font icon rendering.
 - **JS Inspector** — an optional JavaScript REPL tab and inline JSON inspection of terminal output.
+
+<div align="center">
+  <img src="docs/panes.webp" alt="Kommando showing four terminals tiled into split panes" width="860" />
+</div>
 
 ## Requirements
 
