@@ -37,10 +37,13 @@ struct AISidebarView: View {
         HStack(spacing: 8) {
             Image(systemName: "sparkles")
                 .foregroundStyle(.tint)
+                .fixedSize()
             Text("Assistant")
                 .font(.system(size: 13, weight: .semibold))
+                .fixedSize()
+                .layoutPriority(1)
 
-            Spacer()
+            Spacer(minLength: 8)
 
             chatSwitcher
 
@@ -51,6 +54,7 @@ struct AISidebarView: View {
             }
             .buttonStyle(.plain)
             .help("New Chat")
+            .fixedSize()
         }
         .foregroundStyle(.secondary)
         .padding(.horizontal, 12)
@@ -78,14 +82,16 @@ struct AISidebarView: View {
             HStack(spacing: 4) {
                 Text(store.activeChat?.title ?? "New Chat")
                     .lineLimit(1)
-                    .frame(maxWidth: 120, alignment: .trailing)
+                    .truncationMode(.tail)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 9))
+                    .fixedSize()
             }
             .font(.system(size: 12))
+            .frame(maxWidth: 160, alignment: .trailing)
         }
         .menuStyle(.borderlessButton)
-        .fixedSize()
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Conversation

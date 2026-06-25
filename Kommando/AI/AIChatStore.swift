@@ -80,7 +80,12 @@ final class AIChatStore {
         let userMessage = ChatMessage(role: .user, text: trimmed)
         chat.messages.append(userMessage)
         if chat.isPristine == false, chat.title == "New Chat" {
-            chat.title = String(trimmed.prefix(48))
+            // Use the first non-empty line so multi-line prompts don't break the header layout.
+            let firstLine = trimmed
+                .split(whereSeparator: \.isNewline)
+                .first
+                .map(String.init) ?? trimmed
+            chat.title = String(firstLine.prefix(48))
         }
 
         isStreaming = true
