@@ -51,7 +51,19 @@ Then build & run (`⌘R`) in Xcode. Dependencies (SwiftTerm) are resolved automa
 
 ## Installing
 
-Download the latest `Kommando.zip` from [kommando.app](https://kommando.app), unzip it, and drag `Kommando.app` to `/Applications`. Builds are **Developer ID-signed and notarized**, so it opens normally with no Gatekeeper workaround — and it keeps itself up to date via Sparkle.
+Two ways to install — both give you the same signed, auto-updating app:
+
+**Homebrew**
+
+```bash
+brew install --cask christianalares/tap/kommando
+```
+
+**Direct download**
+
+Download the latest `Kommando.zip` from [kommando.app](https://kommando.app), unzip it, and drag `Kommando.app` to `/Applications`.
+
+Builds are **Developer ID-signed and notarized**, so it opens normally with no Gatekeeper workaround — and it keeps itself up to date via Sparkle (so `brew upgrade` is optional once installed).
 
 ## Built with
 
