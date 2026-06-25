@@ -53,6 +53,7 @@ final class KommandoTerminalView: LocalProcessTerminalView {
     private var oscBlockHandlerRegistered = false
     private var mouseDownPoint: CGPoint?
     private var mouseDidDrag = false
+    private var mouseDownWindowWasKey = true
 
     private weak var cachedScroller: NSScroller?
     private var scrollerHideWork: DispatchWorkItem?
@@ -222,6 +223,7 @@ final class KommandoTerminalView: LocalProcessTerminalView {
         case .leftMouseDown:
             mouseDownPoint = convert(event.locationInWindow, from: nil)
             mouseDidDrag = false
+            mouseDownWindowWasKey = window?.isKeyWindow ?? false
             return event
         case .leftMouseDragged:
             if let down = mouseDownPoint {
@@ -531,6 +533,7 @@ final class KommandoTerminalView: LocalProcessTerminalView {
 
     private func handleBlockClick(_ event: NSEvent) {
         guard commandBlocksEnabled, !mouseDidDrag,
+              mouseDownWindowWasKey,
               !event.modifierFlags.contains(.command),
               !event.modifierFlags.contains(.shift) else {
             return
