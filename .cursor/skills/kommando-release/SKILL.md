@@ -18,8 +18,8 @@ Cuts a Developer ID-signed, notarized, Sparkle-auto-updating release of Kommando
 This archives → Developer-ID signs → hardens the bundled `kommando-mcp` helper →
 notarizes → staples → zips → regenerates `appcast.xml` (embedding any release notes) →
 uploads to the GitHub `downloads` release → creates a tagged GitHub release → commits +
-pushes `appcast.xml`. Signing and notarization details are already handled inside the
-script.
+pushes `appcast.xml` → bumps the Homebrew cask in `christianalares/homebrew-tap`. Signing
+and notarization details are already handled inside the script.
 
 ## Channel — do NOT ask the user every time
 
@@ -40,6 +40,26 @@ How channels reach users (standard Sparkle model):
 First stable (`1.0.0`) note: the stable path is wired but hasn't been exercised yet. On the
 first GM, verify the generated `appcast.xml` keeps prior beta entries tagged `beta` while
 the new `1.0.0` entry has no `<sparkle:channel>`, before pushing.
+
+## Homebrew cask — updated automatically
+
+The last step of `release.sh` regenerates the cask in the
+[`christianalares/homebrew-tap`](https://github.com/christianalares/homebrew-tap) repo so
+users on `brew install --cask christianalares/tap/kommando` always get the latest build. It
+clones the tap, rewrites `Casks/kommando.rb` with this release's version + build + sha256,
+and commits/pushes. No manual step needed.
+
+Details that matter if you ever touch it:
+
+- The cask `version` is `"<marketing>,<build>"` (e.g. `0.3.2,7`) so it matches what
+  Sparkle's livecheck reports; the download URL uses `#{version.csv.first}` for the zip name.
+- `auto_updates true` is set (Sparkle self-updates), and `depends_on macos: :tahoe` mirrors
+  the app's `LSMinimumSystemVersion` (26.0).
+- It fires on **every** release, including betas — correct while pre-1.0. Once a `1.0`
+  stable line exists, consider gating the cask bump to `CHANNEL == "stable"` (there's a
+  comment marking the spot in `release.sh`) so beta builds don't reach stable cask users.
+- The `downloads` GitHub release must NOT be flagged as a pre-release (it's just an asset
+  host) or `brew audit` complains. The per-version `v*-beta*` releases stay pre-release.
 
 ## Release notes — ALWAYS confirm the bullets first
 
@@ -140,4 +160,5 @@ already signs it inside-out, so if a new bundled binary appears, sign it the sam
 - A notarytool keychain profile created via
   `xcrun notarytool store-credentials "kommando-notary" --apple-id <email> --team-id 73B979Z49E --password <app-specific-password>`.
 - Sparkle tools present under `vendor/sparkle/bin/` (`./scripts/setup-tools.sh` if missing).
-- `gh` authenticated for `christianalares/kommando`.
+- `gh` authenticated for `christianalares/kommando` **and** `christianalares/homebrew-tap`
+  (the cask-bump step clones and pushes to the tap).

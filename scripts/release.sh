@@ -41,6 +41,9 @@ PROJECT="Kommando.xcodeproj"
 GH_REPO="christianalares/kommando"
 DOWNLOADS_TAG="downloads"
 DOWNLOAD_URL_PREFIX="https://github.com/${GH_REPO}/releases/download/${DOWNLOADS_TAG}/"
+# Homebrew tap that hosts the cask (brew install --cask christianalares/tap/kommando).
+TAP_REPO="christianalares/homebrew-tap"
+CASK_NAME="kommando"
 
 BUILD_DIR="$REPO_ROOT/build"
 DIST_DIR="$REPO_ROOT/dist"
@@ -303,6 +306,59 @@ if git diff --cached --quiet; then
 else
     git commit -m "Release $APP_NAME $VERSION ($CHANNEL $BUILD)"
     git push origin HEAD
+fi
+
+# ---- 9. Update the Homebrew cask -------------------------------------------
+# Regenerates the cask in the tap with this release's version + build + checksum so
+# `brew install --cask $TAP_REPO/$CASK_NAME` always tracks the latest build. The cask
+# version is "<marketing>,<build>" so it matches what Sparkle's livecheck reports.
+# NOTE: this fires on every release; once a 1.0 stable line exists you may want to gate
+# this to `[[ "$CHANNEL" == "stable" ]]` so beta builds don't bump the public cask.
+echo "==> Updating Homebrew cask ($TAP_REPO)"
+CASK_SHA256="$(shasum -a 256 "$DIST_DIR/$ZIP_NAME" | awk '{print $1}')"
+TAP_CLONE="$BUILD_DIR/homebrew-tap"
+rm -rf "$TAP_CLONE"
+if gh repo clone "$TAP_REPO" "$TAP_CLONE" -- --depth 1 >/dev/null 2>&1; then
+    mkdir -p "$TAP_CLONE/Casks"
+    cat > "$TAP_CLONE/Casks/${CASK_NAME}.rb" <<EOF
+cask "${CASK_NAME}" do
+  version "${VERSION},${BUILD}"
+  sha256 "${CASK_SHA256}"
+
+  url "${DOWNLOAD_URL_PREFIX}${APP_NAME}-#{version.csv.first}.zip"
+  name "${APP_NAME}"
+  desc "Terminal with a built-in AI assistant and MCP server"
+  homepage "https://github.com/${GH_REPO}"
+
+  livecheck do
+    url "https://raw.githubusercontent.com/${GH_REPO}/main/appcast.xml"
+    strategy :sparkle
+  end
+
+  auto_updates true
+  depends_on macos: :tahoe
+
+  app "${APP_NAME}.app"
+
+  zap trash: [
+    "~/Library/Application Support/app.kommando.Kommando",
+    "~/Library/Caches/app.kommando.Kommando",
+    "~/Library/HTTPStorages/app.kommando.Kommando",
+    "~/Library/Preferences/app.kommando.Kommando.plist",
+    "~/Library/Saved Application State/app.kommando.Kommando.savedState",
+  ]
+end
+EOF
+    git -C "$TAP_CLONE" add "Casks/${CASK_NAME}.rb"
+    if git -C "$TAP_CLONE" diff --cached --quiet; then
+        echo "    Cask already up to date."
+    else
+        git -C "$TAP_CLONE" commit -m "${CASK_NAME} ${VERSION} (build ${BUILD})" >/dev/null
+        git -C "$TAP_CLONE" push >/dev/null
+        echo "    Cask bumped to ${VERSION},${BUILD}."
+    fi
+else
+    echo "    ⚠️  Could not clone $TAP_REPO; skipping cask update (update it manually)." >&2
 fi
 
 echo ""
