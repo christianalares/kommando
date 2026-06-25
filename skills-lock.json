@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "kommando-release": {
+      "source": "/Users/krille/dev/eget/Kommando/skills",
+      "sourceType": "local",
+      "computedHash": "ed956d1122590b13bd2e3f7a9fdbcfb5e99eb97dca931aeacdedf9c2ec4e57e5"
+    }
+  }
+}
