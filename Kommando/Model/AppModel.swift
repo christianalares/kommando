@@ -677,6 +677,11 @@ final class AppModel {
         }
     }
 
+    /// Clears the focused terminal pane (built-in "Clear Terminal" shortcut).
+    func clearFocusedTerminal() {
+        focusedTerminalSession()?.clearScreen()
+    }
+
     // MARK: - Closing (⌘W cascade: pane → tab → window)
 
     func closeFocused() {

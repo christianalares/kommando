@@ -200,6 +200,12 @@ final class TerminalSession: Identifiable {
         terminalView.send(txt: text + "\r")
     }
 
+    /// Clears the terminal screen (and scrollback when a process is running). Backs the
+    /// configurable "Clear Terminal" shortcut.
+    func clearScreen() {
+        terminalView.clearScreen()
+    }
+
     func terminate() {
         guard hasStarted, !isTerminated else { return }
         isTerminated = true

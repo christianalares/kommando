@@ -87,6 +87,10 @@ struct AppCommands: Commands {
 
             Divider()
 
+            shortcutButton("Clear Terminal", .clearTerminal) { $0.clearFocusedTerminal() }
+
+            Divider()
+
             shortcutButton("New Horizontal Pane", .splitRight) { $0.splitActive(axis: .horizontal) }
             shortcutButton("New Vertical Pane", .splitDown) { $0.splitActive(axis: .vertical) }
             shortcutButton("Zoom Pane", .zoomPane) { $0.toggleZoomFocused() }

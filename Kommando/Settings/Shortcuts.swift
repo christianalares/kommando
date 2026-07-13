@@ -24,6 +24,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     case focusPaneLeft
     case focusPaneUp
     case focusPaneDown
+    case clearTerminal
     case toggleAISidebar
     case newChat
     case generateCommand
@@ -44,6 +45,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .focusPaneLeft: return "Navigate Pane Left"
         case .focusPaneUp: return "Navigate Pane Up"
         case .focusPaneDown: return "Navigate Pane Down"
+        case .clearTerminal: return "Clear Terminal"
         case .toggleAISidebar: return "Toggle AI Panel"
         case .newChat: return "New Chat"
         case .generateCommand: return "Generate Command"
@@ -64,6 +66,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case spaces = "Spaces"
         case tabs = "Tabs"
         case panes = "Panes"
+        case terminal = "Terminal"
         case assistant = "Assistant"
     }
 
@@ -73,6 +76,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .newTab, .newInspectorTab, .nextTab, .previousTab: return .tabs
         case .splitRight, .splitDown, .zoomPane,
              .focusPaneRight, .focusPaneLeft, .focusPaneUp, .focusPaneDown: return .panes
+        case .clearTerminal: return .terminal
         case .toggleAISidebar, .newChat, .generateCommand: return .assistant
         }
     }
@@ -103,6 +107,8 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
             return KeyShortcut(key: KeyShortcut.upArrowToken, command: true, option: true, control: true)
         case .focusPaneDown:
             return KeyShortcut(key: KeyShortcut.downArrowToken, command: true, option: true, control: true)
+        case .clearTerminal:
+            return KeyShortcut(key: "k", command: true)
         case .toggleAISidebar:
             return KeyShortcut(key: "i", command: true)
         case .newChat:

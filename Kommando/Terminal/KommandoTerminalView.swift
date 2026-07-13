@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import Darwin
 import SwiftTerm
 
 final class KommandoTerminalView: LocalProcessTerminalView {
@@ -668,7 +669,48 @@ final class KommandoTerminalView: LocalProcessTerminalView {
     }
 
     @objc private func clearScreenAction() {
-        send(txt: "\u{0c}") // Ctrl-L: clear screen, preserving any half-typed input.
+        clearScreen()
+    }
+
+    /// Clears the terminal the way the user expects regardless of what's running: at the
+    /// shell prompt this is a plain Ctrl-L (preserving half-typed input), but while a
+    /// foreground process owns the pty it wipes the emulator directly so the screen actually
+    /// clears instead of leaking a literal "^L" into the process. Exposed so the configurable
+    /// "Clear Terminal" shortcut and the right-click menu share one implementation.
+    func clearScreen() {
+        if isForegroundCommandRunning {
+            // A foreground process (e.g. a dev server printing logs) owns the pty, so Ctrl-L
+            // would be delivered to *it* — most programs just echo "^L" and the screen never
+            // clears. Wipe the emulator's screen and scrollback directly instead, leaving the
+            // running process untouched so its next output starts on a fresh screen.
+            feed(text: "\u{1b}[H\u{1b}[2J\u{1b}[3J") // cursor home, erase screen, erase scrollback
+            commandBlocks.removeAll()
+            selectedBlockId = nil
+            updateBlockHighlight()
+            getTerminal().updateFullScreen()
+        } else {
+            // At the shell prompt: let zsh's line editor handle Ctrl-L so it clears the
+            // screen, redraws the prompt, and preserves any half-typed input.
+            send(txt: "\u{0c}")
+        }
+    }
+
+    /// True when a foreground child process (not the shell itself) currently owns the pty —
+    /// e.g. a running dev server. In that state the shell's line editor isn't reading input,
+    /// so Ctrl-L would go to the child rather than clearing the screen.
+    ///
+    /// `tcgetpgrp` on the pty's primary fd reports the terminal's foreground process group;
+    /// it equals the shell's pid while idle at the prompt and the child's pgid while a
+    /// command runs.
+    private var isForegroundCommandRunning: Bool {
+        guard let process, process.childfd >= 0, process.shellPid > 0 else {
+            return false
+        }
+        let foreground = tcgetpgrp(process.childfd)
+        guard foreground > 0 else {
+            return false
+        }
+        return foreground != process.shellPid
     }
 
     /// ⌥↑ selects the previous (older) command block, ⌥↓ the next (newer) one, scrolling

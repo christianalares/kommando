@@ -36,11 +36,13 @@ struct UserCommand: Identifiable, Codable, Equatable {
         return trimmed.isEmpty ? command : trimmed
     }
 
-    /// Seeded on first launch so ⌘K clears the terminal out of the box.
-    static let clearDefault = UserCommand(
-        name: "Clear",
-        command: "clear",
-        shortcut: KeyShortcut(key: "k", command: true),
-        execute: true
-    )
+    /// True when this is the untouched "Clear" command Kommando used to auto-seed (⌘K →
+    /// `clear`). Used to migrate it away now that clearing is a built-in shortcut, while
+    /// leaving any user-customized command alone.
+    var matchesLegacyClearSeed: Bool {
+        name == "Clear"
+            && command == "clear"
+            && execute
+            && shortcut == KeyShortcut(key: "k", command: true)
+    }
 }

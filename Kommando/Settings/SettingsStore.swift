@@ -48,6 +48,7 @@ final class SettingsStore {
         static let aiProvider = "aiProvider"
         static let shortcuts = "shortcutOverrides"
         static let userCommands = "userCommands"
+        static let didMigrateClearCommand = "didMigrateClearCommand"
         static let mcpServerEnabled = "mcpServerEnabled"
         static let commandBlocksEnabled = "commandBlocksEnabled"
         // NOTE: also read directly by BetaUpdaterDelegate in Updater.swift; keep in sync.
@@ -133,9 +134,20 @@ final class SettingsStore {
            let decoded = try? JSONDecoder().decode([UserCommand].self, from: data) {
             userCommands = decoded
         } else {
-            // First launch: seed a sensible default (⌘K clears the terminal).
-            userCommands = [.clearDefault]
+            // No seed: clearing is a built-in, configurable shortcut now (⌘K → Clear Terminal).
+            userCommands = []
             persistUserCommands()
+        }
+
+        // One-time migration: drop the previously auto-seeded "Clear" command, since clearing
+        // is now a first-class shortcut. Only the untouched seed is removed, so anyone who
+        // customized it keeps their command.
+        if !defaults.bool(forKey: Key.didMigrateClearCommand) {
+            defaults.set(true, forKey: Key.didMigrateClearCommand)
+            if let index = userCommands.firstIndex(where: { $0.matchesLegacyClearSeed }) {
+                userCommands.remove(at: index)
+                persistUserCommands()
+            }
         }
     }
 
